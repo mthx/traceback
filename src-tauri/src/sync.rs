@@ -7,44 +7,42 @@ use crate::git::GitActivity;
 
 /// Clean up notes by trimming consecutive blank lines
 fn clean_notes(notes: Option<String>) -> Option<String> {
-    notes
-        .map(|text| {
-            // Split into lines, trim each line, and filter out consecutive blank lines
-            let lines: Vec<&str> = text.lines().collect();
-            let mut cleaned_lines = Vec::new();
-            let mut prev_was_blank = false;
+    notes.and_then(|text| {
+        // Split into lines, trim each line, and filter out consecutive blank lines
+        let lines: Vec<&str> = text.lines().collect();
+        let mut cleaned_lines = Vec::new();
+        let mut prev_was_blank = false;
 
-            for line in lines {
-                let trimmed = line.trim_end();
-                let is_blank = trimmed.is_empty();
+        for line in lines {
+            let trimmed = line.trim_end();
+            let is_blank = trimmed.is_empty();
 
-                // Skip consecutive blank lines
-                if is_blank && prev_was_blank {
-                    continue;
-                }
-
-                cleaned_lines.push(trimmed);
-                prev_was_blank = is_blank;
+            // Skip consecutive blank lines
+            if is_blank && prev_was_blank {
+                continue;
             }
 
-            // Remove trailing blank lines
-            while cleaned_lines.last().map_or(false, |l| l.is_empty()) {
-                cleaned_lines.pop();
-            }
+            cleaned_lines.push(trimmed);
+            prev_was_blank = is_blank;
+        }
 
-            // Remove leading blank lines
-            while cleaned_lines.first().map_or(false, |l| l.is_empty()) {
-                cleaned_lines.remove(0);
-            }
+        // Remove trailing blank lines
+        while cleaned_lines.last().map_or(false, |l| l.is_empty()) {
+            cleaned_lines.pop();
+        }
 
-            let result = cleaned_lines.join("\n");
-            if result.is_empty() {
-                None
-            } else {
-                Some(result)
-            }
-        })
-        .flatten()
+        // Remove leading blank lines
+        while cleaned_lines.first().map_or(false, |l| l.is_empty()) {
+            cleaned_lines.remove(0);
+        }
+
+        let result = cleaned_lines.join("\n");
+        if result.is_empty() {
+            None
+        } else {
+            Some(result)
+        }
+    })
 }
 
 pub fn sync_single_event(db: &Database, cal_event: &CalendarEvent) -> Result<usize, String> {

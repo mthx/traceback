@@ -252,13 +252,15 @@ pub fn get_repository_activities(
     let reflog_refs = vec!["HEAD", "refs/heads/*", "refs/remotes/*"];
 
     for ref_pattern in reflog_refs {
-        if let Err(_) = walk_reflog(
+        if walk_reflog(
             &repo,
             ref_pattern,
             since_timestamp,
             &mut activities,
             repo_info,
-        ) {
+        )
+        .is_err()
+        {
             // Skip refs that don't exist or can't be read
             continue;
         }
@@ -425,8 +427,7 @@ fn format_activity_message(reflog_message: &str, commit_message: &str) -> String
     }
 
     // For reset operations: "reset: moving to HEAD" -> "Reset to HEAD"
-    if reflog_message.starts_with("reset: moving to ") {
-        let target = &reflog_message[17..];
+    if let Some(target) = reflog_message.strip_prefix("reset: moving to ") {
         return format!("Reset to {}", target);
     }
 

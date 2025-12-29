@@ -192,8 +192,12 @@ async fn sync_calendar_source(
     state.with_db(|db| {
         let mut new_count = 0;
         for cal_event in &calendar_events {
-            new_count += sync_single_event(db, cal_event)
-                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))))?;
+            new_count += sync_single_event(db, cal_event).map_err(|e| {
+                rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e,
+                )))
+            })?;
         }
         eprintln!("[Calendar] Synced {} new events", new_count);
         Ok(new_count)
@@ -311,8 +315,12 @@ fn sync_browser_source(
 
     for visit in &visits {
         match app_state.with_db(|db| {
-            sync::sync_browser_visit(db, visit, &discovered_repos, &github_orgs)
-                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e))))
+            sync::sync_browser_visit(db, visit, &discovered_repos, &github_orgs).map_err(|e| {
+                rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e,
+                )))
+            })
         }) {
             Ok(count) => new_count += count,
             Err(e) => {

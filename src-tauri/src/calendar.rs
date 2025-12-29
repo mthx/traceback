@@ -199,7 +199,7 @@ unsafe fn create_nsdate(
 unsafe fn nsdate_to_string(nsdate: &objc2_foundation::NSDate) -> String {
     let timestamp = nsdate.timeIntervalSince1970();
     let datetime = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp as i64, 0)
-        .unwrap_or_else(|| chrono::Utc::now());
+        .unwrap_or_else(chrono::Utc::now);
     datetime.to_rfc3339()
 }
 
