@@ -201,21 +201,6 @@ unsafe fn nsdate_to_string(nsdate: &objc2_foundation::NSDate) -> String {
     datetime.to_rfc3339()
 }
 
-#[cfg(target_os = "macos")]
-pub async fn get_calendar_events(days_ahead: i32) -> Result<Vec<CalendarEvent>, String> {
-    use chrono::{Duration, Utc};
-
-    let now = Utc::now();
-    let end_date = now + Duration::days(days_ahead as i64);
-
-    get_calendar_events_range(&now.to_rfc3339(), &end_date.to_rfc3339()).await
-}
-
-#[cfg(not(target_os = "macos"))]
-pub async fn get_calendar_events(_days_ahead: i32) -> Result<Vec<CalendarEvent>, String> {
-    Err("Calendar access is only supported on macOS".to_string())
-}
-
 #[cfg(not(target_os = "macos"))]
 pub async fn get_calendar_events_range(
     _start_date: &str,

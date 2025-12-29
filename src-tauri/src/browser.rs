@@ -52,19 +52,6 @@ pub fn auto_detect_zen_profile() -> Result<Option<String>, String> {
     Ok(None)
 }
 
-/// Get browser visits from last N days
-pub fn get_browser_visits_days_back(
-    profile_path: &str,
-    days_back: i32,
-) -> Result<Vec<BrowserVisit>, String> {
-    use chrono::{Duration, Utc};
-
-    let now = Utc::now();
-    let start = now - Duration::days(days_back as i64);
-
-    get_browser_visits_range(profile_path, start.timestamp(), now.timestamp())
-}
-
 /// Get browser visits between specific timestamps (in seconds)
 pub fn get_browser_visits_range(
     profile_path: &str,

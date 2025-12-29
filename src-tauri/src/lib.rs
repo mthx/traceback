@@ -4,14 +4,13 @@ mod db;
 mod git;
 mod sync;
 
-use browser::{auto_detect_zen_profile, get_browser_visits_days_back};
+use browser::auto_detect_zen_profile;
 use calendar::{
-    check_calendar_permission, get_calendar_events, get_calendar_events_range, CalendarEvent,
-    CalendarPermissionStatus,
+    check_calendar_permission, get_calendar_events_range, CalendarPermissionStatus,
 };
 use chrono::{DateTime, Utc};
-use db::{Database, Event, Project, ProjectRule, SyncStatus, WorkDomain};
-use git::{discover_repositories, get_repository_activities, GitRepository};
+use db::{Database, Event, Project, ProjectRule, SyncStatus};
+use git::{discover_repositories, get_repository_activities};
 use std::path::PathBuf;
 
 // Default sync window for all event sources on initial sync
@@ -26,41 +25,9 @@ struct AppState {
     db: Arc<Mutex<Database>>,
 }
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
-#[tauri::command]
-fn fetch_calendar_events(days_ahead: i32) -> Result<Vec<CalendarEvent>, String> {
-    tauri::async_runtime::block_on(async { get_calendar_events(days_ahead).await })
-}
-
 #[tauri::command]
 fn check_calendar_permission_status() -> CalendarPermissionStatus {
     check_calendar_permission()
-}
-
-#[tauri::command]
-fn sync_calendar(state: State<AppState>, days_ahead: i32) -> Result<usize, String> {
-    tauri::async_runtime::block_on(async {
-        // Phase 1: Fetch events asynchronously without locking the DB
-        let calendar_events = get_calendar_events(days_ahead).await?;
-
-        // Phase 2: Lock the database and perform synchronous writes
-        let db = state
-            .db
-            .lock()
-            .map_err(|e| format!("Failed to lock database: {}", e))?;
-
-        let mut synced_count = 0;
-        for cal_event in calendar_events {
-            synced_count += sync_single_event(&db, &cal_event)?;
-        }
-
-        Ok(synced_count)
-    })
 }
 
 #[tauri::command]
@@ -498,20 +465,6 @@ fn set_setting(state: State<AppState>, key: String, value: String) -> Result<(),
 }
 
 #[tauri::command]
-fn home_dir() -> Result<String, String> {
-    std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .map_err(|e| format!("Failed to get home directory: {}", e))
-}
-
-#[tauri::command]
-fn discover_git_repositories(dev_folder: String, max_depth: Option<usize>) -> Result<Vec<GitRepository>, String> {
-    let path = PathBuf::from(dev_folder);
-    let depth = max_depth.unwrap_or(3);
-    discover_repositories(&path, depth)
-}
-
-#[tauri::command]
 fn assign_event_to_project(
     state: State<AppState>,
     event_id: i64,
@@ -589,60 +542,6 @@ fn apply_rules_to_events(state: State<AppState>) -> Result<usize, String> {
 }
 
 #[tauri::command]
-fn sync_git_events(state: State<AppState>, dev_folder: String, max_depth: Option<usize>) -> Result<usize, String> {
-    // Phase 1: Discover repositories
-    let path = PathBuf::from(dev_folder);
-    let depth = max_depth.unwrap_or(3);
-    let repositories = discover_repositories(&path, depth)?;
-
-    // Phase 2: For each repo, get activities since last sync
-    let mut total_synced = 0;
-
-    for repo in repositories {
-        // Get last sync time for this specific repository
-        let last_sync_key = format!("git_last_sync_{}", repo.repository_id);
-
-        let since_date = {
-            let db = state
-                .db
-                .lock()
-                .map_err(|e| format!("Failed to lock database: {}", e))?;
-
-            match db.get_setting(&last_sync_key) {
-                Ok(Some(last_sync)) => Some(last_sync),
-                Ok(None) => {
-                    // First sync for this repo - go back 90 days
-                    let ninety_days_ago = Utc::now() - chrono::Duration::days(DEFAULT_SYNC_DAYS_BACK);
-                    Some(ninety_days_ago.to_rfc3339())
-                }
-                Err(_) => None,
-            }
-        }; // Release lock
-
-        // Get activities from git reflog
-        let activities = get_repository_activities(&repo, since_date.as_deref())?;
-
-        // Phase 3: Insert activities into database
-        let db = state
-            .db
-            .lock()
-            .map_err(|e| format!("Failed to lock database: {}", e))?;
-
-        for activity in activities {
-            sync_git_activity(&db, &activity, &repo)?;
-            total_synced += 1;
-        }
-
-        // Update last sync time for this repository
-        let now = Utc::now().to_rfc3339();
-        db.set_setting(&last_sync_key, &now)
-            .map_err(|e| format!("Failed to update git sync time: {}", e))?;
-    }
-
-    Ok(total_synced)
-}
-
-#[tauri::command]
 fn get_zen_profile_path(state: State<AppState>) -> Result<Option<String>, String> {
     let db = state
         .db
@@ -665,36 +564,6 @@ fn set_zen_profile_path(state: State<AppState>, path: String) -> Result<(), Stri
 #[tauri::command]
 fn auto_detect_zen_profile_path() -> Result<Option<String>, String> {
     auto_detect_zen_profile()
-}
-
-#[tauri::command]
-fn get_work_domains(state: State<AppState>) -> Result<Vec<WorkDomain>, String> {
-    let db = state
-        .db
-        .lock()
-        .map_err(|e| format!("Failed to lock database: {}", e))?;
-    db.get_work_domains()
-        .map_err(|e| format!("Failed to get work domains: {}", e))
-}
-
-#[tauri::command]
-fn add_work_domain(state: State<AppState>, domain: String) -> Result<i64, String> {
-    let db = state
-        .db
-        .lock()
-        .map_err(|e| format!("Failed to lock database: {}", e))?;
-    db.add_work_domain(&domain)
-        .map_err(|e| format!("Failed to add work domain: {}", e))
-}
-
-#[tauri::command]
-fn remove_work_domain(state: State<AppState>, id: i64) -> Result<(), String> {
-    let db = state
-        .db
-        .lock()
-        .map_err(|e| format!("Failed to lock database: {}", e))?;
-    db.remove_work_domain(id)
-        .map_err(|e| format!("Failed to remove work domain: {}", e))
 }
 
 #[tauri::command]
@@ -725,62 +594,6 @@ fn remove_github_org(state: State<AppState>, org_name: String) -> Result<(), Str
         .map_err(|e| format!("Failed to lock database: {}", e))?;
     db.remove_github_org(&org_name)
         .map_err(|e| format!("Failed to remove GitHub org: {}", e))
-}
-
-#[tauri::command]
-fn sync_browser_history(state: State<AppState>, days_back: i32) -> Result<usize, String> {
-    let profile_path = {
-        let db = state
-            .db
-            .lock()
-            .map_err(|e| format!("Failed to lock database: {}", e))?;
-
-        match db.get_setting("zen_browser_profile_path")
-            .map_err(|e| format!("Failed to get browser profile path: {}", e))?
-        {
-            Some(path) => path,
-            None => {
-                return Err(
-                    "Zen browser profile path not configured. Please configure in settings."
-                        .to_string(),
-                )
-            }
-        }
-    };
-
-    let visits = get_browser_visits_days_back(&profile_path, days_back)?;
-
-    let (discovered_repos, github_orgs) = {
-        let db = state
-            .db
-            .lock()
-            .map_err(|e| format!("Failed to lock database: {}", e))?;
-
-        let discovered_repos = db.get_discovered_repository_paths()
-            .map_err(|e| format!("Failed to get discovered repos: {}", e))?;
-
-        let github_orgs = db.get_github_orgs()
-            .map_err(|e| format!("Failed to get GitHub orgs: {}", e))?;
-
-        (discovered_repos, github_orgs)
-    };
-
-    let db = state
-        .db
-        .lock()
-        .map_err(|e| format!("Failed to lock database: {}", e))?;
-
-    let mut synced_count = 0;
-
-    for visit in visits {
-        if db.is_work_domain(&visit.url)
-            .map_err(|e| format!("Failed to check work domain: {}", e))?
-        {
-            synced_count += sync::sync_browser_visit(&db, &visit, &discovered_repos, &github_orgs)?;
-        }
-    }
-
-    Ok(synced_count)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -847,10 +660,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            greet,
-            fetch_calendar_events,
             check_calendar_permission_status,
-            sync_calendar,
             get_stored_events,
             get_event_project,
             get_all_projects,
@@ -864,9 +674,6 @@ pub fn run() {
             get_project,
             get_setting,
             set_setting,
-            home_dir,
-            discover_git_repositories,
-            sync_git_events,
             assign_event_to_project,
             create_project_rule,
             get_project_rules,
@@ -876,13 +683,9 @@ pub fn run() {
             get_zen_profile_path,
             set_zen_profile_path,
             auto_detect_zen_profile_path,
-            get_work_domains,
-            add_work_domain,
-            remove_work_domain,
             get_github_orgs,
             add_github_org,
             remove_github_org,
-            sync_browser_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
