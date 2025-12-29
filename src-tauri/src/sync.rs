@@ -27,12 +27,12 @@ fn clean_notes(notes: Option<String>) -> Option<String> {
         }
 
         // Remove trailing blank lines
-        while cleaned_lines.last().map_or(false, |l| l.is_empty()) {
+        while cleaned_lines.last().is_some_and(|l| l.is_empty()) {
             cleaned_lines.pop();
         }
 
         // Remove leading blank lines
-        while cleaned_lines.first().map_or(false, |l| l.is_empty()) {
+        while cleaned_lines.first().is_some_and(|l| l.is_empty()) {
             cleaned_lines.remove(0);
         }
 
@@ -172,7 +172,7 @@ pub fn sync_browser_visit(
     let repository_path = extract_repository_path_from_url(&visit.url);
 
     // Hybrid filtering: Include if matches discovered repos OR manual orgs
-    let should_include = repository_path.as_ref().map_or(false, |path| {
+    let should_include = repository_path.as_ref().is_some_and(|path| {
         // Check if path matches any discovered repo
         discovered_repos.iter().any(|r| r == path) ||
         // OR check if path matches any configured org (e.g., "facebook/react" matches org "facebook")
