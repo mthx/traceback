@@ -101,11 +101,6 @@ fn walk_directory(
             if let Some(parent) = entry_path.parent() {
                 match identify_repository(parent) {
                     Ok(repo) => {
-                        eprintln!(
-                            "[Git] Found repository: {} at {}",
-                            repo.repository_name,
-                            repo.local_path.display()
-                        );
                         repositories.push(repo);
                     }
                     Err(e) => {
