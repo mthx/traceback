@@ -7,43 +7,44 @@ use crate::git::GitActivity;
 
 /// Clean up notes by trimming consecutive blank lines
 fn clean_notes(notes: Option<String>) -> Option<String> {
-    notes.map(|text| {
-        // Split into lines, trim each line, and filter out consecutive blank lines
-        let lines: Vec<&str> = text.lines().collect();
-        let mut cleaned_lines = Vec::new();
-        let mut prev_was_blank = false;
+    notes
+        .map(|text| {
+            // Split into lines, trim each line, and filter out consecutive blank lines
+            let lines: Vec<&str> = text.lines().collect();
+            let mut cleaned_lines = Vec::new();
+            let mut prev_was_blank = false;
 
-        for line in lines {
-            let trimmed = line.trim_end();
-            let is_blank = trimmed.is_empty();
+            for line in lines {
+                let trimmed = line.trim_end();
+                let is_blank = trimmed.is_empty();
 
-            // Skip consecutive blank lines
-            if is_blank && prev_was_blank {
-                continue;
+                // Skip consecutive blank lines
+                if is_blank && prev_was_blank {
+                    continue;
+                }
+
+                cleaned_lines.push(trimmed);
+                prev_was_blank = is_blank;
             }
 
-            cleaned_lines.push(trimmed);
-            prev_was_blank = is_blank;
-        }
+            // Remove trailing blank lines
+            while cleaned_lines.last().map_or(false, |l| l.is_empty()) {
+                cleaned_lines.pop();
+            }
 
-        // Remove trailing blank lines
-        while cleaned_lines.last().map_or(false, |l| l.is_empty()) {
-            cleaned_lines.pop();
-        }
+            // Remove leading blank lines
+            while cleaned_lines.first().map_or(false, |l| l.is_empty()) {
+                cleaned_lines.remove(0);
+            }
 
-        // Remove leading blank lines
-        while cleaned_lines.first().map_or(false, |l| l.is_empty()) {
-            cleaned_lines.remove(0);
-        }
-
-        let result = cleaned_lines.join("\n");
-        if result.is_empty() {
-            None
-        } else {
-            Some(result)
-        }
-    })
-    .flatten()
+            let result = cleaned_lines.join("\n");
+            if result.is_empty() {
+                None
+            } else {
+                Some(result)
+            }
+        })
+        .flatten()
 }
 
 pub fn sync_single_event(db: &Database, cal_event: &CalendarEvent) -> Result<usize, String> {
@@ -91,11 +92,12 @@ pub fn sync_single_event(db: &Database, cal_event: &CalendarEvent) -> Result<usi
         external_link,
         type_specific_data: Some(type_specific_json),
         project_id: None, // Will be set manually or by rules
-        created_at: 0, // Will be set by upsert_event
-        updated_at: 0, // Will be set by upsert_event
+        created_at: 0,    // Will be set by upsert_event
+        updated_at: 0,    // Will be set by upsert_event
     };
 
-    let (_event_id, was_new) = db.upsert_event(&event)
+    let (_event_id, was_new) = db
+        .upsert_event(&event)
         .map_err(|e| format!("Failed to insert event: {}", e))?;
 
     Ok(if was_new { 1 } else { 0 })
@@ -104,7 +106,7 @@ pub fn sync_single_event(db: &Database, cal_event: &CalendarEvent) -> Result<usi
 pub fn sync_git_activity(
     db: &Database,
     git_activity: &GitActivity,
-    repo_info: &crate::git::GitRepository
+    repo_info: &crate::git::GitRepository,
 ) -> Result<usize, String> {
     // Create external_id: {repo_id}:{timestamp}
     let external_id = format!("{}:{}", git_activity.repository_id, git_activity.timestamp);
@@ -142,11 +144,12 @@ pub fn sync_git_activity(
         external_link: None, // Could add GitHub/GitLab links in the future
         type_specific_data: Some(type_specific_json),
         project_id: None, // Will be set manually or by rules
-        created_at: 0, // Will be set by upsert_event
-        updated_at: 0, // Will be set by upsert_event
+        created_at: 0,    // Will be set by upsert_event
+        updated_at: 0,    // Will be set by upsert_event
     };
 
-    let (_event_id, was_new) = db.upsert_event(&event)
+    let (_event_id, was_new) = db
+        .upsert_event(&event)
         .map_err(|e| format!("Failed to insert git event: {}", e))?;
 
     Ok(if was_new { 1 } else { 0 })
@@ -162,7 +165,7 @@ pub fn sync_browser_visit(
     db: &Database,
     visit: &BrowserVisit,
     discovered_repos: &[String],
-    github_orgs: &[String]
+    github_orgs: &[String],
 ) -> Result<usize, String> {
     // Extract domain from URL
     let domain = extract_domain(&visit.url);
@@ -227,7 +230,8 @@ pub fn sync_browser_visit(
         updated_at: 0,
     };
 
-    let (_event_id, was_new) = db.upsert_event(&event)
+    let (_event_id, was_new) = db
+        .upsert_event(&event)
         .map_err(|e| format!("Failed to insert browser event: {}", e))?;
 
     Ok(if was_new { 1 } else { 0 })
@@ -257,7 +261,8 @@ fn extract_repository_path_from_url(url: &str) -> Option<String> {
     // Check if this is a code hosting platform
     if !domain.contains("github.com")
         && !domain.contains("gitlab.com")
-        && !domain.contains("bitbucket.org") {
+        && !domain.contains("bitbucket.org")
+    {
         return None;
     }
 

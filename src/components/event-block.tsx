@@ -1,4 +1,10 @@
-import type { StoredEvent, Project, AggregatedGitEvent, AggregatedBrowserEvent, AggregatedRepositoryEvent } from "@/types/event";
+import type {
+  StoredEvent,
+  Project,
+  AggregatedGitEvent,
+  AggregatedBrowserEvent,
+  AggregatedRepositoryEvent,
+} from "@/types/event";
 import { parseEventData } from "@/types/event";
 import {
   Tooltip,
@@ -11,7 +17,11 @@ import {
   BrowserAggregateTooltipContent,
   RepositoryAggregateTooltipContent,
 } from "@/components/event-tooltip-content";
-import { getEventColor, getEventBlockStyle, formatEventTime } from "./calendar-utils";
+import {
+  getEventColor,
+  getEventBlockStyle,
+  formatEventTime,
+} from "./calendar-utils";
 import { useRuleDialog } from "@/contexts/rule-dialog-context";
 
 interface EventBlockProps {
@@ -53,7 +63,9 @@ export function EventBlock({
     const eventColor = project?.color || "#94a3b8";
     const style = getEventBlockStyle(eventColor, position);
 
-    const activityCount = repositoryAggregate.git_activities.length + repositoryAggregate.browser_visits.length;
+    const activityCount =
+      repositoryAggregate.git_activities.length +
+      repositoryAggregate.browser_visits.length;
 
     return (
       <Tooltip>
@@ -113,7 +125,9 @@ export function EventBlock({
             }}
           >
             <div className="text-xs font-semibold truncate">
-              {browserAggregate.domain === 'github.com' ? browserAggregate.title.split('/').pop() : browserAggregate.title}
+              {browserAggregate.domain === "github.com"
+                ? browserAggregate.title.split("/").pop()
+                : browserAggregate.title}
             </div>
             <div className="text-xs text-muted-foreground">
               {browserAggregate.visits.length}{" "}
@@ -157,7 +171,7 @@ export function EventBlock({
             }}
           >
             <div className="text-xs font-semibold truncate">
-              {gitAggregate.repository_name.split('/').pop()}
+              {gitAggregate.repository_name.split("/").pop()}
             </div>
             <div className="text-xs text-muted-foreground">
               {gitAggregate.activities.length}{" "}
@@ -200,9 +214,7 @@ export function EventBlock({
               onClick();
             }}
           >
-            <div className="text-xs font-semibold truncate">
-              {event.title}
-            </div>
+            <div className="text-xs font-semibold truncate">{event.title}</div>
             <div className="text-xs text-muted-foreground">
               {formatEventTime(event.start_date)}
             </div>

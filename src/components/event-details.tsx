@@ -19,12 +19,16 @@ import type { ReactNode } from "react";
 import { formatEventTime } from "@/components/calendar-utils";
 
 interface EventDetailsProps {
-  event: StoredEvent | AggregatedGitEvent | AggregatedBrowserEvent | AggregatedRepositoryEvent;
+  event:
+    | StoredEvent
+    | AggregatedGitEvent
+    | AggregatedBrowserEvent
+    | AggregatedRepositoryEvent;
 }
 
 // Abbreviate GitHub URLs with conventional formatting
 function abbreviateGitHubUrl(url: string): string {
-  if (!url.startsWith('https://github.com/')) {
+  if (!url.startsWith("https://github.com/")) {
     return url;
   }
 
@@ -40,7 +44,7 @@ function abbreviateGitHubUrl(url: string): string {
   }
 
   // For other GitHub URLs, just remove the https://github.com/ prefix
-  return url.replace('https://github.com/', '');
+  return url.replace("https://github.com/", "");
 }
 
 export function DetailsSection({
@@ -77,7 +81,9 @@ export function EventDetails({ event }: EventDetailsProps) {
     return <GitEventDetails event={event} gitData={gitData} />;
   } else if (event.event_type === "browser_history") {
     const browserData = parseBrowserEventData(event);
-    return <BrowserHistoryEventDetails event={event} browserData={browserData} />;
+    return (
+      <BrowserHistoryEventDetails event={event} browserData={browserData} />
+    );
   }
   return null;
 }
@@ -144,29 +150,33 @@ interface RepositoryAggregateEventDetailsProps {
   event: AggregatedRepositoryEvent;
 }
 
-function RepositoryAggregateEventDetails({ event }: RepositoryAggregateEventDetailsProps) {
+function RepositoryAggregateEventDetails({
+  event,
+}: RepositoryAggregateEventDetailsProps) {
   // Combine git activities and browser visits into a single timeline
   type TimelineItem = {
-    type: 'git' | 'browser';
+    type: "git" | "browser";
     timestamp: string;
     event: StoredEvent;
   };
 
   const timeline: TimelineItem[] = [
-    ...event.git_activities.map(activity => ({
-      type: 'git' as const,
+    ...event.git_activities.map((activity) => ({
+      type: "git" as const,
       timestamp: activity.start_date,
       event: activity,
     })),
-    ...event.browser_visits.map(visit => ({
-      type: 'browser' as const,
+    ...event.browser_visits.map((visit) => ({
+      type: "browser" as const,
       timestamp: visit.start_date,
       event: visit,
     })),
   ];
 
   // Sort by timestamp (newest first or chronological order)
-  timeline.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  timeline.sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
 
   const totalCount = event.git_activities.length + event.browser_visits.length;
 
@@ -176,9 +186,12 @@ function RepositoryAggregateEventDetails({ event }: RepositoryAggregateEventDeta
         <DetailsSection title={`Activities (${totalCount})`}>
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {timeline.map((item, idx) => {
-              if (item.type === 'git') {
+              if (item.type === "git") {
                 return (
-                  <div key={`git-${item.event.id}-${idx}`} className="text-sm border-l-2 border-blue-500 pl-2">
+                  <div
+                    key={`git-${item.event.id}-${idx}`}
+                    className="text-sm border-l-2 border-blue-500 pl-2"
+                  >
                     <div className="font-medium">
                       {formatEventTime(item.event.start_date)}
                     </div>
@@ -189,10 +202,15 @@ function RepositoryAggregateEventDetails({ event }: RepositoryAggregateEventDeta
                 );
               } else {
                 const browserData = parseBrowserEventData(item.event);
-                const displayUrl = browserData?.url ? abbreviateGitHubUrl(browserData.url) : '';
+                const displayUrl = browserData?.url
+                  ? abbreviateGitHubUrl(browserData.url)
+                  : "";
 
                 return (
-                  <div key={`browser-${item.event.id}-${idx}`} className="text-sm border-l-2 border-green-500 pl-2">
+                  <div
+                    key={`browser-${item.event.id}-${idx}`}
+                    className="text-sm border-l-2 border-green-500 pl-2"
+                  >
                     <div className="font-medium">
                       {formatEventTime(item.event.start_date)}
                     </div>
@@ -247,8 +265,10 @@ interface BrowserAggregateEventDetailsProps {
   event: AggregatedBrowserEvent;
 }
 
-function BrowserAggregateEventDetails({ event }: BrowserAggregateEventDetailsProps) {
-  const isCollaborativeDoc = event.aggregate_type === 'collaborative_doc';
+function BrowserAggregateEventDetails({
+  event,
+}: BrowserAggregateEventDetailsProps) {
+  const isCollaborativeDoc = event.aggregate_type === "collaborative_doc";
 
   return (
     <div className="space-y-4">
@@ -256,10 +276,15 @@ function BrowserAggregateEventDetails({ event }: BrowserAggregateEventDetailsPro
         <div className="space-y-2 max-h-48 overflow-y-auto">
           {event.visits.map((visit, idx) => {
             const browserData = parseBrowserEventData(visit);
-            const displayUrl = browserData?.url ? abbreviateGitHubUrl(browserData.url) : '';
+            const displayUrl = browserData?.url
+              ? abbreviateGitHubUrl(browserData.url)
+              : "";
 
             return (
-              <div key={visit.id || idx} className="text-sm border-l-2 border-muted pl-2">
+              <div
+                key={visit.id || idx}
+                className="text-sm border-l-2 border-muted pl-2"
+              >
                 <div className="font-medium">
                   {formatEventTime(visit.start_date)}
                 </div>
@@ -305,8 +330,12 @@ interface BrowserHistoryEventDetailsProps {
   browserData: BrowserHistoryEventData | null;
 }
 
-function BrowserHistoryEventDetails({ browserData }: BrowserHistoryEventDetailsProps) {
-  const displayUrl = browserData?.url ? abbreviateGitHubUrl(browserData.url) : '';
+function BrowserHistoryEventDetails({
+  browserData,
+}: BrowserHistoryEventDetailsProps) {
+  const displayUrl = browserData?.url
+    ? abbreviateGitHubUrl(browserData.url)
+    : "";
 
   return (
     <div className="space-y-4">
@@ -323,9 +352,7 @@ function BrowserHistoryEventDetails({ browserData }: BrowserHistoryEventDetailsP
             </a>
           </DetailsSection>
 
-          <DetailsSection title="Domain">
-            {browserData.domain}
-          </DetailsSection>
+          <DetailsSection title="Domain">{browserData.domain}</DetailsSection>
 
           {browserData.visit_count > 1 && (
             <DetailsSection title="Visit Count">

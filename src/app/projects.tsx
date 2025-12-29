@@ -20,7 +20,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ColorPicker } from "@/components/color-picker";
 import { MoreVertical, Pencil, Trash2, Plus } from "lucide-react";
-import type { StoredEvent, Project, ProjectRule, AggregatedGitEvent, AggregatedBrowserEvent, AggregatedRepositoryEvent } from "../types/event";
+import type {
+  StoredEvent,
+  Project,
+  ProjectRule,
+  AggregatedGitEvent,
+  AggregatedBrowserEvent,
+  AggregatedRepositoryEvent,
+} from "../types/event";
 import type { DateRange } from "../components/date-range-filter";
 import { RuleEditDialog } from "../components/rule-edit-dialog";
 import {
@@ -238,7 +245,13 @@ export function Projects({
     }
   }
 
-  const handleEventAssign = (event: StoredEvent | AggregatedGitEvent | AggregatedBrowserEvent | AggregatedRepositoryEvent) => {
+  const handleEventAssign = (
+    event:
+      | StoredEvent
+      | AggregatedGitEvent
+      | AggregatedBrowserEvent
+      | AggregatedRepositoryEvent
+  ) => {
     openEventDialog(event, fetchProjectDetails);
   };
 

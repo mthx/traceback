@@ -1,5 +1,11 @@
 import { EventContent, EventHeader } from "@/components/event-content";
-import type { AggregatedGitEvent, AggregatedBrowserEvent, AggregatedRepositoryEvent, Project, StoredEvent } from "@/types/event";
+import type {
+  AggregatedGitEvent,
+  AggregatedBrowserEvent,
+  AggregatedRepositoryEvent,
+  Project,
+  StoredEvent,
+} from "@/types/event";
 
 interface CalendarEventTooltipContentProps {
   event: StoredEvent;

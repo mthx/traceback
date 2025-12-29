@@ -2,7 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import type { StoredEvent, Project } from "@/types/event";
-import { parseEventData, parseGitEventData, parseBrowserEventData } from "@/types/event";
+import {
+  parseEventData,
+  parseGitEventData,
+  parseBrowserEventData,
+} from "@/types/event";
 import { useEventDialog } from "@/contexts/rule-dialog-context";
 import { formatEventDateTime } from "@/components/calendar-utils";
 import { getEventIcon } from "@/components/event-content";
@@ -139,7 +143,9 @@ export function EventsList({
             const gitData =
               event.event_type === "git" ? parseGitEventData(event) : null;
             const browserData =
-              event.event_type === "browser_history" ? parseBrowserEventData(event) : null;
+              event.event_type === "browser_history"
+                ? parseBrowserEventData(event)
+                : null;
             const projectColor = getProjectColor(event.project_id);
             const projectName = getProjectName(event.project_id);
 
@@ -165,9 +171,7 @@ export function EventsList({
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{event.title}</div>
                     <div className="text-sm text-muted-foreground space-y-1 mt-1">
-                      <div>
-                        {formatEventDateTime(event.start_date)}
-                      </div>
+                      <div>{formatEventDateTime(event.start_date)}</div>
                       {eventData?.location && (
                         <div className="truncate">📍 {eventData.location}</div>
                       )}
@@ -177,9 +181,7 @@ export function EventsList({
                         </div>
                       )}
                       {browserData?.domain && (
-                        <div className="truncate">
-                          🌐 {browserData.domain}
-                        </div>
+                        <div className="truncate">🌐 {browserData.domain}</div>
                       )}
                       {projectName && (
                         <div className="flex items-center gap-2 mt-2">

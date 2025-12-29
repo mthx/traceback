@@ -164,89 +164,97 @@ export function App() {
         <SidebarProvider defaultOpen className="h-full">
           {showOnboarding ? (
             <main className="flex-1 overflow-y-auto h-full flex items-center justify-center p-8">
-            <Card className="max-w-md">
-              <CardHeader>
-                <CardTitle>Welcome to Traceback</CardTitle>
-                <CardDescription>
-                  {isChecking
-                    ? "Checking calendar permissions..."
-                    : "Import your Mac Calendar events to start tracking time"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Click below to import your calendar events. This will request
-                    permission to access your Mac Calendar.
-                  </p>
-                  <Button onClick={handleFirstSync} disabled={isChecking} className="w-full">
-                    Import Calendar Events
-                  </Button>
-                  <p className="text-xs text-muted-foreground">
-                    You'll be prompted to grant calendar access. Once granted,
-                    events will sync automatically.
-                  </p>
-                  {syncError && (
-                    <div className="border border-destructive rounded-md p-3 mt-4">
-                      <p className="text-sm text-destructive font-medium">Error</p>
-                      <p className="text-sm text-muted-foreground mt-1">{syncError}</p>
-                      <p className="text-sm text-muted-foreground mt-2">
-                        Make sure to grant calendar permissions when prompted.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </main>
-        ) : (
-          <>
-            <AppSidebar
-              page={page}
-              selectedProjectId={selectedProjectId}
-              projects={projects}
-              onChangePage={(page) =>
-                setState({
-                  ...state,
-                  page,
-                  selectedProjectId: null,
-                })
-              }
-              onSelectProject={(projectId) =>
-                setState({
-                  ...state,
-                  page: "projects",
-                  selectedProjectId: projectId,
-                })
-              }
-              onProjectCreated={fetchProjects}
-            />
-            <main className="flex-1 border-l overflow-y-auto h-full">
-              {page === "calendar" && (
-                <CalendarPage
-                  showWeekends={showWeekends}
-                  onShowWeekendsChange={setShowWeekends}
-                />
-              )}
-              {page === "events" && <Events />}
-              {page === "projects" && (
-                <Projects
-                  projectId={selectedProjectId}
-                  projectTab={projectTab}
-                  onProjectTabChange={(tab) =>
-                    setState({ ...state, projectTab: tab })
-                  }
-                  onProjectUpdated={handleProjectUpdated}
-                  dateRange={dateRange}
-                  onDateRangeChange={setDateRange}
-                  showWeekends={showWeekends}
-                  onShowWeekendsChange={setShowWeekends}
-                />
-              )}
-              {page === "settings" && <Settings />}
+              <Card className="max-w-md">
+                <CardHeader>
+                  <CardTitle>Welcome to Traceback</CardTitle>
+                  <CardDescription>
+                    {isChecking
+                      ? "Checking calendar permissions..."
+                      : "Import your Mac Calendar events to start tracking time"}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Click below to import your calendar events. This will
+                      request permission to access your Mac Calendar.
+                    </p>
+                    <Button
+                      onClick={handleFirstSync}
+                      disabled={isChecking}
+                      className="w-full"
+                    >
+                      Import Calendar Events
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      You'll be prompted to grant calendar access. Once granted,
+                      events will sync automatically.
+                    </p>
+                    {syncError && (
+                      <div className="border border-destructive rounded-md p-3 mt-4">
+                        <p className="text-sm text-destructive font-medium">
+                          Error
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {syncError}
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-2">
+                          Make sure to grant calendar permissions when prompted.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </main>
-          </>
-        )}
+          ) : (
+            <>
+              <AppSidebar
+                page={page}
+                selectedProjectId={selectedProjectId}
+                projects={projects}
+                onChangePage={(page) =>
+                  setState({
+                    ...state,
+                    page,
+                    selectedProjectId: null,
+                  })
+                }
+                onSelectProject={(projectId) =>
+                  setState({
+                    ...state,
+                    page: "projects",
+                    selectedProjectId: projectId,
+                  })
+                }
+                onProjectCreated={fetchProjects}
+              />
+              <main className="flex-1 border-l overflow-y-auto h-full">
+                {page === "calendar" && (
+                  <CalendarPage
+                    showWeekends={showWeekends}
+                    onShowWeekendsChange={setShowWeekends}
+                  />
+                )}
+                {page === "events" && <Events />}
+                {page === "projects" && (
+                  <Projects
+                    projectId={selectedProjectId}
+                    projectTab={projectTab}
+                    onProjectTabChange={(tab) =>
+                      setState({ ...state, projectTab: tab })
+                    }
+                    onProjectUpdated={handleProjectUpdated}
+                    dateRange={dateRange}
+                    onDateRangeChange={setDateRange}
+                    showWeekends={showWeekends}
+                    onShowWeekendsChange={setShowWeekends}
+                  />
+                )}
+                {page === "settings" && <Settings />}
+              </main>
+            </>
+          )}
         </SidebarProvider>
       </div>
     </RuleDialogProvider>

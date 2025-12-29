@@ -8,7 +8,11 @@ import {
   CalendarEventTooltipContent,
   GitAggregateTooltipContent,
 } from "@/components/event-tooltip-content";
-import { getEventColor, getEventBlockStyle, formatEventTime } from "./calendar-utils";
+import {
+  getEventColor,
+  getEventBlockStyle,
+  formatEventTime,
+} from "./calendar-utils";
 import { useRuleDialog } from "@/contexts/rule-dialog-context";
 
 interface MonthEventBlockProps {
@@ -50,7 +54,7 @@ export function MonthEventBlock({
             <span className="font-medium">
               {formatEventTime(gitAggregate.start_date)}
             </span>{" "}
-            {gitAggregate.repository_name.split('/').pop()}
+            {gitAggregate.repository_name.split("/").pop()}
           </div>
         </TooltipTrigger>
         <TooltipContent

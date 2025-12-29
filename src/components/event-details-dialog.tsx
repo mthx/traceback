@@ -6,12 +6,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useRuleDialog } from "@/contexts/rule-dialog-context";
-import type { AggregatedGitEvent, AggregatedBrowserEvent, AggregatedRepositoryEvent, Project, StoredEvent } from "@/types/event";
+import type {
+  AggregatedGitEvent,
+  AggregatedBrowserEvent,
+  AggregatedRepositoryEvent,
+  Project,
+  StoredEvent,
+} from "@/types/event";
 
 interface EventDetailsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  event: StoredEvent | AggregatedGitEvent | AggregatedBrowserEvent | AggregatedRepositoryEvent | null;
+  event:
+    | StoredEvent
+    | AggregatedGitEvent
+    | AggregatedBrowserEvent
+    | AggregatedRepositoryEvent
+    | null;
   onAssignmentComplete: () => void;
 }
 

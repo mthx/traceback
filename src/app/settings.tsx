@@ -109,13 +109,17 @@ export function Settings() {
   async function autoDetectZenProfile() {
     setIsDetecting(true);
     try {
-      const detected = await invoke<string | null>("auto_detect_zen_profile_path");
+      const detected = await invoke<string | null>(
+        "auto_detect_zen_profile_path"
+      );
       if (detected) {
         setZenProfilePath(detected);
         await invoke("set_zen_profile_path", { path: detected });
         setSuccess("Zen profile auto-detected successfully");
       } else {
-        setError("Could not auto-detect Zen profile. Please select it manually.");
+        setError(
+          "Could not auto-detect Zen profile. Please select it manually."
+        );
       }
     } catch (err) {
       setError(err as string);
@@ -144,7 +148,8 @@ export function Settings() {
       setSuccess("GitHub org added successfully");
 
       // Reset cache in calendar view
-      const { resetGitHubOrgsCache } = await import("@/components/calendar-view");
+      const { resetGitHubOrgsCache } =
+        await import("@/components/calendar-view");
       resetGitHubOrgsCache();
     } catch (err) {
       setError(err as string);
@@ -159,7 +164,8 @@ export function Settings() {
       setSuccess("GitHub org removed successfully");
 
       // Reset cache in calendar view
-      const { resetGitHubOrgsCache } = await import("@/components/calendar-view");
+      const { resetGitHubOrgsCache } =
+        await import("@/components/calendar-view");
       resetGitHubOrgsCache();
     } catch (err) {
       setError(err as string);
@@ -243,8 +249,8 @@ export function Settings() {
           <div>
             <h2 className="text-lg font-semibold">Zen Browser Profile</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Path to your Zen browser profile folder. Browser history from work-related
-              domains will be automatically synced.
+              Path to your Zen browser profile folder. Browser history from
+              work-related domains will be automatically synced.
             </p>
           </div>
           <div className="space-y-2">
@@ -270,7 +276,8 @@ export function Settings() {
             </div>
             {!zenProfilePath && (
               <p className="text-xs text-muted-foreground">
-                Click "Auto-detect" to find your Zen profile automatically, or browse to select it manually.
+                Click "Auto-detect" to find your Zen profile automatically, or
+                browse to select it manually.
               </p>
             )}
           </div>
@@ -281,9 +288,10 @@ export function Settings() {
           <div>
             <h2 className="text-lg font-semibold">GitHub Organizations</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Specify which GitHub organizations contain your focused work repositories.
-              GitHub visits to these orgs will be aggregated per-repository, while other
-              GitHub activity will be grouped under a general "GitHub" category.
+              Specify which GitHub organizations contain your focused work
+              repositories. GitHub visits to these orgs will be aggregated
+              per-repository, while other GitHub activity will be grouped under
+              a general "GitHub" category.
             </p>
           </div>
           <div className="space-y-2">
@@ -296,7 +304,7 @@ export function Settings() {
                 placeholder="e.g., facebook, microsoft, mycompany"
                 className="flex-1"
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
+                  if (e.key === "Enter") {
                     addGitHubOrg();
                   }
                 }}

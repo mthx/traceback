@@ -8,7 +8,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MoreVertical } from "lucide-react";
-import type { StoredEvent, Project, AggregatedGitEvent, AggregatedBrowserEvent, AggregatedRepositoryEvent } from "../types/event";
+import type {
+  StoredEvent,
+  Project,
+  AggregatedGitEvent,
+  AggregatedBrowserEvent,
+  AggregatedRepositoryEvent,
+} from "../types/event";
 import {
   CalendarViewProvider,
   CalendarDateLabel,
@@ -70,7 +76,13 @@ export function Calendar({
     [projects]
   );
 
-  const handleEventAssign = (event: StoredEvent | AggregatedGitEvent | AggregatedBrowserEvent | AggregatedRepositoryEvent) => {
+  const handleEventAssign = (
+    event:
+      | StoredEvent
+      | AggregatedGitEvent
+      | AggregatedBrowserEvent
+      | AggregatedRepositoryEvent
+  ) => {
     openEventDialog(event, fetchData);
   };
 

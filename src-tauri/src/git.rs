@@ -61,7 +61,10 @@ impl GitActivityType {
 }
 
 /// Discover git repositories in a directory tree up to max_depth
-pub fn discover_repositories(root_path: &Path, max_depth: usize) -> Result<Vec<GitRepository>, String> {
+pub fn discover_repositories(
+    root_path: &Path,
+    max_depth: usize,
+) -> Result<Vec<GitRepository>, String> {
     let mut repositories = Vec::new();
     walk_directory(root_path, 0, max_depth, &mut repositories)?;
     Ok(repositories)
@@ -98,11 +101,19 @@ fn walk_directory(
             if let Some(parent) = entry_path.parent() {
                 match identify_repository(parent) {
                     Ok(repo) => {
-                        eprintln!("[Git] Found repository: {} at {}", repo.repository_name, repo.local_path.display());
+                        eprintln!(
+                            "[Git] Found repository: {} at {}",
+                            repo.repository_name,
+                            repo.local_path.display()
+                        );
                         repositories.push(repo);
                     }
                     Err(e) => {
-                        eprintln!("[Git] Failed to identify repository at {}: {}", parent.display(), e);
+                        eprintln!(
+                            "[Git] Failed to identify repository at {}: {}",
+                            parent.display(),
+                            e
+                        );
                     }
                 }
             }
@@ -122,7 +133,8 @@ fn walk_directory(
                     && name != "vendor"
                     && name != ".git"
                     && name != ".npm"
-                    && name != ".cache" {
+                    && name != ".cache"
+                {
                     let _ = walk_directory(&entry_path, current_depth + 1, max_depth, repositories);
                 }
             }
@@ -168,14 +180,16 @@ fn parse_repository_path(origin_url: &str) -> Option<String> {
 
 /// Identify a git repository using hash of all initial commits
 fn identify_repository(repo_path: &Path) -> Result<GitRepository, String> {
-    let repo = Repository::open(repo_path)
-        .map_err(|e| format!("Failed to open repository: {}", e))?;
+    let repo =
+        Repository::open(repo_path).map_err(|e| format!("Failed to open repository: {}", e))?;
 
     // Get origin URL if available
     let origin_url = get_remote_origin(&repo).ok();
 
     // Parse repository path from origin URL
-    let repository_path = origin_url.as_ref().and_then(|url| parse_repository_path(url));
+    let repository_path = origin_url
+        .as_ref()
+        .and_then(|url| parse_repository_path(url));
 
     // Generate repository ID
     let repository_id = match &origin_url {
@@ -185,8 +199,8 @@ fn identify_repository(repo_path: &Path) -> Result<GitRepository, String> {
         }
         None => {
             // Fallback: Hash of absolute path
-            let canonical_path = std::fs::canonicalize(repo_path)
-                .unwrap_or_else(|_| repo_path.to_path_buf());
+            let canonical_path =
+                std::fs::canonicalize(repo_path).unwrap_or_else(|_| repo_path.to_path_buf());
             let path_str = canonical_path.to_string_lossy();
             let hash = format!("{:x}", md5::compute(path_str.as_bytes()));
             format!("local-{}", hash)
@@ -209,10 +223,12 @@ fn identify_repository(repo_path: &Path) -> Result<GitRepository, String> {
 }
 
 fn get_remote_origin(repo: &Repository) -> Result<String, String> {
-    let remote = repo.find_remote("origin")
+    let remote = repo
+        .find_remote("origin")
         .map_err(|e| format!("Failed to find remote origin: {}", e))?;
 
-    let url = remote.url()
+    let url = remote
+        .url()
         .ok_or_else(|| "Remote origin has no URL".to_string())?;
 
     Ok(url.to_string())
@@ -241,7 +257,13 @@ pub fn get_repository_activities(
     let reflog_refs = vec!["HEAD", "refs/heads/*", "refs/remotes/*"];
 
     for ref_pattern in reflog_refs {
-        if let Err(_) = walk_reflog(&repo, ref_pattern, since_timestamp, &mut activities, repo_info) {
+        if let Err(_) = walk_reflog(
+            &repo,
+            ref_pattern,
+            since_timestamp,
+            &mut activities,
+            repo_info,
+        ) {
             // Skip refs that don't exist or can't be read
             continue;
         }
@@ -259,7 +281,8 @@ fn walk_reflog(
 ) -> Result<(), String> {
     // Handle glob patterns
     if ref_name.contains('*') {
-        let references = repo.references()
+        let references = repo
+            .references()
             .map_err(|e| format!("Failed to get references: {}", e))?;
 
         for reference in references {
@@ -293,7 +316,8 @@ fn walk_single_reflog(
     activities: &mut Vec<GitActivity>,
     repo_info: &GitRepository,
 ) -> Result<(), String> {
-    let reflog = repo.reflog(ref_name)
+    let reflog = repo
+        .reflog(ref_name)
         .map_err(|e| format!("Failed to read reflog for {}: {}", ref_name, e))?;
 
     for entry in reflog.iter() {
@@ -365,7 +389,10 @@ fn extract_ref_name(message: &str, activity_type: &GitActivityType) -> Option<St
         }
         GitActivityType::Merge => {
             // "merge feature-branch: Merge branch 'feature-branch'"
-            message.split_whitespace().nth(1).map(|s| s.trim_end_matches(':').to_string())
+            message
+                .split_whitespace()
+                .nth(1)
+                .map(|s| s.trim_end_matches(':').to_string())
         }
         GitActivityType::Rebase => {
             // "rebase (start): checkout main"
@@ -378,7 +405,11 @@ fn extract_ref_name(message: &str, activity_type: &GitActivityType) -> Option<St
 fn format_activity_message(reflog_message: &str, commit_message: &str) -> String {
     // For commits, use just the commit message (no prefix needed)
     if reflog_message.starts_with("commit") && !commit_message.is_empty() {
-        return commit_message.lines().next().unwrap_or(commit_message).to_string();
+        return commit_message
+            .lines()
+            .next()
+            .unwrap_or(commit_message)
+            .to_string();
     }
 
     // For checkouts, extract branch names: "checkout: moving from X to Y" -> "Switched to Y (from X)"
@@ -425,7 +456,6 @@ fn format_activity_message(reflog_message: &str, commit_message: &str) -> String
     // Fallback: use the reflog message as-is
     reflog_message.to_string()
 }
-
 
 #[cfg(test)]
 mod tests {

@@ -24,7 +24,12 @@ export interface Project {
 export interface ProjectRule {
   id: number;
   project_id: number;
-  rule_type: "organizer" | "title_pattern" | "repository" | "url_pattern" | "domain";
+  rule_type:
+    | "organizer"
+    | "title_pattern"
+    | "repository"
+    | "url_pattern"
+    | "domain";
   match_value: string;
   created_at: string;
 }
@@ -44,7 +49,7 @@ export interface GitEventData {
   ref_name?: string;
   commit_hash?: string;
   repository_path?: string; // Canonical org/repo path (e.g., "facebook/react")
-  origin_url?: string;       // Full remote origin URL
+  origin_url?: string; // Full remote origin URL
 }
 
 export interface BrowserHistoryEventData {
@@ -121,9 +126,11 @@ export interface AggregatedGitEvent {
   project_id?: number;
 }
 
-export function aggregateGitEvents(events: StoredEvent[]): AggregatedGitEvent[] {
+export function aggregateGitEvents(
+  events: StoredEvent[]
+): AggregatedGitEvent[] {
   // Filter only git events
-  const gitEvents = events.filter(e => e.event_type === "git");
+  const gitEvents = events.filter((e) => e.event_type === "git");
 
   // Group by repository and day
   const byRepoAndDay = new Map<string, StoredEvent[]>();
@@ -149,8 +156,9 @@ export function aggregateGitEvents(events: StoredEvent[]): AggregatedGitEvent[] 
     if (repoEvents.length === 0) continue;
 
     // Sort by time
-    const sorted = repoEvents.sort((a, b) =>
-      new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+    const sorted = repoEvents.sort(
+      (a, b) =>
+        new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
     );
 
     // Create single aggregate for all events in this repo on this day
@@ -164,8 +172,8 @@ function createAggregateFromGroup(events: StoredEvent[]): AggregatedGitEvent {
   const gitData = parseGitEventData(events[0])!;
 
   // Find min start and max end times
-  const startTimes = events.map(e => new Date(e.start_date).getTime());
-  const endTimes = events.map(e => new Date(e.end_date).getTime());
+  const startTimes = events.map((e) => new Date(e.start_date).getTime());
+  const endTimes = events.map((e) => new Date(e.end_date).getTime());
 
   let minStart = Math.min(...startTimes);
   const maxEnd = Math.max(...endTimes);
@@ -173,7 +181,7 @@ function createAggregateFromGroup(events: StoredEvent[]): AggregatedGitEvent {
   // If the first event (earliest) is a commit, extend start time back by 30 minutes
   // as a heuristic to model the work that led to the commit
   const firstEventData = parseGitEventData(events[0]);
-  if (firstEventData?.activity_type === 'commit') {
+  if (firstEventData?.activity_type === "commit") {
     const THIRTY_MINUTES_MS = 30 * 60 * 1000;
     minStart = minStart - THIRTY_MINUTES_MS;
   }
@@ -199,7 +207,11 @@ export function isAggregatedGitEvent(
 // Browser Event Aggregation
 // ============================================================================
 
-export type BrowserAggregateType = 'collaborative_doc' | 'code_repo' | 'project_tool' | 'domain';
+export type BrowserAggregateType =
+  | "collaborative_doc"
+  | "code_repo"
+  | "project_tool"
+  | "domain";
 
 export interface AggregatedBrowserEvent {
   id: string; // composite ID for react keys
@@ -259,31 +271,37 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
   // Dropbox Paper (including www.dropbox.com paper links)
   {
     pattern: /^(paper\.dropbox\.com|www\.dropbox\.com)$/,
-    type: 'collaborative_doc',
+    type: "collaborative_doc",
     extractGroupingKey: (url, pageTitle) => {
       // Filter out root domains, search pages, and folder views
-      if (url === 'https://paper.dropbox.com/' || url === 'https://paper.dropbox.com' ||
-          url === 'https://www.dropbox.com/' || url === 'https://www.dropbox.com' ||
-          url.startsWith('https://www.dropbox.com/search') ||
-          url.startsWith('https://www.dropbox.com/home') ||
-          url.startsWith('https://www.dropbox.com/work')) {
+      if (
+        url === "https://paper.dropbox.com/" ||
+        url === "https://paper.dropbox.com" ||
+        url === "https://www.dropbox.com/" ||
+        url === "https://www.dropbox.com" ||
+        url.startsWith("https://www.dropbox.com/search") ||
+        url.startsWith("https://www.dropbox.com/home") ||
+        url.startsWith("https://www.dropbox.com/work")
+      ) {
         return null;
       }
 
       // Clean and normalize the title
       let cleanTitle = pageTitle
-        .replace(/ [–—-] Dropbox Paper$/, '')
-        .replace(/ [–—-] Dropbox$/, '')
+        .replace(/ [–—-] Dropbox Paper$/, "")
+        .replace(/ [–—-] Dropbox$/, "")
         .trim();
 
       // Filter out generic titles
-      if (!cleanTitle ||
-          cleanTitle === 'Dropbox Paper' ||
-          cleanTitle === 'Dropbox' ||
-          cleanTitle === 'Files' ||
-          cleanTitle === 'Files - Dropbox' ||
-          cleanTitle === 'Search - Dropbox' ||
-          cleanTitle.startsWith('Dropbox - ')) {
+      if (
+        !cleanTitle ||
+        cleanTitle === "Dropbox Paper" ||
+        cleanTitle === "Dropbox" ||
+        cleanTitle === "Files" ||
+        cleanTitle === "Files - Dropbox" ||
+        cleanTitle === "Search - Dropbox" ||
+        cleanTitle.startsWith("Dropbox - ")
+      ) {
         return null;
       }
 
@@ -294,22 +312,29 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
   // Google Docs/Sheets/Slides
   {
     pattern: /^docs\.google\.com$/,
-    type: 'collaborative_doc',
+    type: "collaborative_doc",
     extractGroupingKey: (url, pageTitle) => {
       // Filter out root domain
-      if (url === 'https://docs.google.com/' || url === 'https://docs.google.com') {
+      if (
+        url === "https://docs.google.com/" ||
+        url === "https://docs.google.com"
+      ) {
         return null;
       }
 
       // Clean and normalize the title
       let cleanTitle = pageTitle
-        .replace(/ - Google (Docs|Sheets|Slides)$/, '')
+        .replace(/ - Google (Docs|Sheets|Slides)$/, "")
         .trim();
 
       // Filter out generic titles
-      if (!cleanTitle || cleanTitle.startsWith('Untitled') ||
-          cleanTitle === 'Google Docs' || cleanTitle === 'Google Sheets' ||
-          cleanTitle === 'Google Slides') {
+      if (
+        !cleanTitle ||
+        cleanTitle.startsWith("Untitled") ||
+        cleanTitle === "Google Docs" ||
+        cleanTitle === "Google Sheets" ||
+        cleanTitle === "Google Slides"
+      ) {
         return null;
       }
 
@@ -321,11 +346,14 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
   // Monday.com - boards and docs
   {
     pattern: /^.*\.monday\.com$/,
-    type: 'collaborative_doc',
+    type: "collaborative_doc",
     extractGroupingKey: (url, pageTitle) => {
       // Filter out root domains
-      if (url === 'https://monday.com/' || url === 'https://monday.com' ||
-          url.match(/^https:\/\/[^.]+\.monday\.com\/?$/)) {
+      if (
+        url === "https://monday.com/" ||
+        url === "https://monday.com" ||
+        url.match(/^https:\/\/[^.]+\.monday\.com\/?$/)
+      ) {
         return null;
       }
 
@@ -340,8 +368,8 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
       if (docMatch) {
         // Clean up title if present
         let cleanTitle = pageTitle
-          .replace(/ \| monday\.com$/, '')
-          .replace(/ - monday\.com$/, '')
+          .replace(/ \| monday\.com$/, "")
+          .replace(/ - monday\.com$/, "")
           .trim();
 
         // Use title if meaningful, otherwise use doc ID
@@ -349,7 +377,7 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
       }
 
       // Other monday.com pages - use title or generic fallback
-      if (!pageTitle || pageTitle === 'monday.com') {
+      if (!pageTitle || pageTitle === "monday.com") {
         return null;
       }
 
@@ -360,10 +388,10 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
   // Notion
   {
     pattern: /^([^.]+\.)?notion\.(so|site)$/,
-    type: 'collaborative_doc',
+    type: "collaborative_doc",
     extractGroupingKey: (_url, pageTitle) => {
       // Filter out generic titles
-      if (!pageTitle || pageTitle === 'Notion') {
+      if (!pageTitle || pageTitle === "Notion") {
         return null;
       }
       return pageTitle;
@@ -373,15 +401,19 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
   // GitLab - Group by repository path from URL
   {
     pattern: /^gitlab\.com$/,
-    type: 'code_repo',
+    type: "code_repo",
     extractGroupingKey: (url, _pageTitle) => {
       // Filter out docs and root domain
-      if (url.includes('docs.gitlab.com') || url === 'https://gitlab.com/' || url === 'https://gitlab.com') {
+      if (
+        url.includes("docs.gitlab.com") ||
+        url === "https://gitlab.com/" ||
+        url === "https://gitlab.com"
+      ) {
         return null;
       }
       const match = url.match(/gitlab\.com\/([^/?#]+\/[^/?#]+)/);
       if (!match) return null;
-      const repo = match[1].split('/').slice(0, 2).join('/');
+      const repo = match[1].split("/").slice(0, 2).join("/");
       return repo;
     },
     generateTitle: (groupingKey) => groupingKey, // Just the repo path, icon will indicate it's GitLab
@@ -389,10 +421,10 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
   // Slack
   {
     pattern: /^[^.]+\.slack\.com$/,
-    type: 'project_tool',
+    type: "project_tool",
     extractGroupingKey: (url, _pageTitle) => {
       // Extract workspace from domain
-      const workspace = new URL(url).hostname.split('.')[0];
+      const workspace = new URL(url).hostname.split(".")[0];
       const match = url.match(/\/archives\/([^/?#]+)/);
       if (match) {
         return `${workspace}#${match[1]}`;
@@ -404,40 +436,46 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
   // Jira (Atlassian)
   {
     pattern: /^.*\.atlassian\.net$/,
-    type: 'project_tool',
+    type: "project_tool",
     extractGroupingKey: (url, pageTitle) => {
       // Match project key from issue browse or project pages
       const issueMatch = url.match(/\/browse\/([A-Z]+-\d+)/);
       if (issueMatch) {
-        const projectKey = issueMatch[1].split('-')[0];
+        const projectKey = issueMatch[1].split("-")[0];
         return projectKey;
       }
       const projectMatch = url.match(/\/projects\/([^/?#]+)/);
       if (projectMatch) {
         return projectMatch[1];
       }
-      return pageTitle || 'Jira';
+      return pageTitle || "Jira";
     },
-    generateTitle: (groupingKey) => groupingKey === 'Jira' ? groupingKey : `Jira: ${groupingKey}`,
+    generateTitle: (groupingKey) =>
+      groupingKey === "Jira" ? groupingKey : `Jira: ${groupingKey}`,
   },
   // Linear
   {
     pattern: /^linear\.app$/,
-    type: 'project_tool',
+    type: "project_tool",
     extractGroupingKey: (url, pageTitle) => {
       const match = url.match(/\/team\/([^/?#]+)/);
-      return match ? match[1] : (pageTitle || 'Linear');
+      return match ? match[1] : pageTitle || "Linear";
     },
-    generateTitle: (groupingKey) => groupingKey === 'Linear' ? groupingKey : `Linear: ${groupingKey}`,
+    generateTitle: (groupingKey) =>
+      groupingKey === "Linear" ? groupingKey : `Linear: ${groupingKey}`,
   },
   // Figma
   {
     pattern: /^([^.]+\.)?figma\.com$/,
-    type: 'collaborative_doc',
+    type: "collaborative_doc",
     extractGroupingKey: (_url, pageTitle) => {
       // Filter out generic titles
-      let cleanTitle = pageTitle.replace(/ - Figma$/, '').trim();
-      if (!cleanTitle || cleanTitle === 'Figma' || cleanTitle.startsWith('Untitled')) {
+      let cleanTitle = pageTitle.replace(/ - Figma$/, "").trim();
+      if (
+        !cleanTitle ||
+        cleanTitle === "Figma" ||
+        cleanTitle.startsWith("Untitled")
+      ) {
         return null;
       }
       return cleanTitle;
@@ -453,9 +491,13 @@ function classifyDomain(
   githubOrgs: string[]
 ): { config: DomainConfig | null; groupingKey: string | null } {
   // Special handling for GitHub - check org list first
-  if (domain === 'github.com') {
+  if (domain === "github.com") {
     // Filter out docs.github.com and root domain
-    if (url.includes('docs.github.com') || url === 'https://github.com/' || url === 'https://github.com') {
+    if (
+      url.includes("docs.github.com") ||
+      url === "https://github.com/" ||
+      url === "https://github.com"
+    ) {
       return { config: null, groupingKey: null };
     }
 
@@ -471,11 +513,11 @@ function classifyDomain(
       return {
         config: {
           pattern: /^github\.com$/,
-          type: 'code_repo',
+          type: "code_repo",
           extractGroupingKey: () => repoPath,
-          generateTitle: (key) => key
+          generateTitle: (key) => key,
         },
-        groupingKey: repoPath
+        groupingKey: repoPath,
       };
     }
 
@@ -483,11 +525,11 @@ function classifyDomain(
     return {
       config: {
         pattern: /^github\.com$/,
-        type: 'code_repo',
-        extractGroupingKey: () => 'GitHub',
-        generateTitle: () => 'GitHub'
+        type: "code_repo",
+        extractGroupingKey: () => "GitHub",
+        generateTitle: () => "GitHub",
       },
-      groupingKey: 'GitHub'
+      groupingKey: "GitHub",
     };
   }
 
@@ -512,7 +554,9 @@ export function aggregateBrowserEvents(
   githubOrgs: string[] = []
 ): AggregatedBrowserEvent[] {
   // Filter only browser_history events
-  const browserEvents = events.filter(e => e.event_type === "browser_history");
+  const browserEvents = events.filter(
+    (e) => e.event_type === "browser_history"
+  );
 
   // Group by grouping key + domain + day
   // groupingKey varies by platform: repo path for GitHub/GitLab, doc title for docs, etc.
@@ -525,7 +569,7 @@ export function aggregateBrowserEvents(
     const { config, groupingKey } = classifyDomain(
       browserData.domain,
       browserData.url,
-      browserData.page_title || '',
+      browserData.page_title || "",
       githubOrgs
     );
 
@@ -549,24 +593,35 @@ export function aggregateBrowserEvents(
     if (visits.length === 0) continue;
 
     // Sort by time
-    const sorted = visits.sort((a, b) =>
-      new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+    const sorted = visits.sort(
+      (a, b) =>
+        new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
     );
 
     // Extract groupingKey from composite key (groupingKey:domain:date)
-    const parts = key.split(':');
-    const groupingKey = parts.slice(0, -2).join(':'); // Handle grouping keys with colons
+    const parts = key.split(":");
+    const groupingKey = parts.slice(0, -2).join(":"); // Handle grouping keys with colons
 
     const firstVisit = sorted[0];
     const browserData = parseBrowserEventData(firstVisit)!;
-    const { config } = classifyDomain(browserData.domain, browserData.url, browserData.page_title || '', githubOrgs);
+    const { config } = classifyDomain(
+      browserData.domain,
+      browserData.url,
+      browserData.page_title || "",
+      githubOrgs
+    );
 
     if (!config) continue; // Should never happen due to earlier filter
 
     // Create aggregate key for uniqueness
     const aggregateKey = `${config.type}:${groupingKey}`;
 
-    const aggregate = createBrowserAggregateFromGroup(sorted, aggregateKey, config, groupingKey);
+    const aggregate = createBrowserAggregateFromGroup(
+      sorted,
+      aggregateKey,
+      config,
+      groupingKey
+    );
     aggregated.push(aggregate);
   }
 
@@ -582,7 +637,7 @@ function createBrowserAggregateFromGroup(
   const firstBrowserData = parseBrowserEventData(visits[0])!;
 
   // Find min start and max end times
-  const visitTimes = visits.map(v => new Date(v.start_date).getTime());
+  const visitTimes = visits.map((v) => new Date(v.start_date).getTime());
   const minStart = Math.min(...visitTimes);
   const maxEnd = Math.max(...visitTimes);
 
@@ -591,7 +646,8 @@ function createBrowserAggregateFromGroup(
   const THIRTY_MINUTES_MS = 30 * 60 * 1000;
 
   // Start buffer: -15 min for collaborative docs, none for others
-  const startBuffer = config.type === 'collaborative_doc' ? FIFTEEN_MINUTES_MS : 0;
+  const startBuffer =
+    config.type === "collaborative_doc" ? FIFTEEN_MINUTES_MS : 0;
   const adjustedStart = minStart - startBuffer;
 
   // End buffer: +15 min (assume work continued)
@@ -599,9 +655,8 @@ function createBrowserAggregateFromGroup(
 
   // Minimum span: 30 minutes for single visits
   const span = adjustedEnd - adjustedStart;
-  const finalEnd = span < THIRTY_MINUTES_MS
-    ? adjustedStart + THIRTY_MINUTES_MS
-    : adjustedEnd;
+  const finalEnd =
+    span < THIRTY_MINUTES_MS ? adjustedStart + THIRTY_MINUTES_MS : adjustedEnd;
 
   // Generate display title from grouping key
   const title = config.generateTitle(groupingKey);
@@ -611,11 +666,11 @@ function createBrowserAggregateFromGroup(
   let repository: string | undefined;
   let workspace: string | undefined;
 
-  if (config.type === 'collaborative_doc') {
+  if (config.type === "collaborative_doc") {
     document_id = groupingKey;
-  } else if (config.type === 'code_repo') {
+  } else if (config.type === "code_repo") {
     repository = groupingKey;
-  } else if (config.type === 'project_tool') {
+  } else if (config.type === "project_tool") {
     workspace = groupingKey;
   }
 
@@ -687,7 +742,7 @@ export function aggregateRepositoryEvents(
   const aggregated: AggregatedRepositoryEvent[] = [];
 
   for (const [key, allEvents] of byRepoAndDay) {
-    const repoPath = key.split(':').slice(0, -1).join(':');
+    const repoPath = key.split(":").slice(0, -1).join(":");
 
     const gitEvents = allEvents.filter((e) => e.event_type === "git");
     const browserEvents = allEvents.filter(

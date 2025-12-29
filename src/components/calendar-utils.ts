@@ -15,9 +15,7 @@ export function getEventColor(
   projectMap?: Map<number, Project>
 ): string {
   const project =
-    event.project_id && projectMap
-      ? projectMap.get(event.project_id)
-      : null;
+    event.project_id && projectMap ? projectMap.get(event.project_id) : null;
   return project?.color || NEUTRAL_COLOR;
 }
 
@@ -35,7 +33,8 @@ export function getEventBlockStyle(
 ) {
   return {
     ...(position?.top !== undefined && {
-      top: typeof position.top === "number" ? `${position.top}px` : position.top,
+      top:
+        typeof position.top === "number" ? `${position.top}px` : position.top,
     }),
     ...(position?.height !== undefined && {
       height:

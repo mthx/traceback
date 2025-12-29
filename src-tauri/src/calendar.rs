@@ -104,7 +104,9 @@ pub async fn get_calendar_events_range(
             }
 
             // Get organizer
-            let organizer = event.organizer().and_then(|org| org.name().map(|n| n.to_string()));
+            let organizer = event
+                .organizer()
+                .and_then(|org| org.name().map(|n| n.to_string()));
 
             result.push(CalendarEvent {
                 event_id,

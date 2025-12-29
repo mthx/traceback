@@ -5,9 +5,7 @@ mod git;
 mod sync;
 
 use browser::auto_detect_zen_profile;
-use calendar::{
-    check_calendar_permission, get_calendar_events_range, CalendarPermissionStatus,
-};
+use calendar::{check_calendar_permission, get_calendar_events_range, CalendarPermissionStatus};
 use chrono::{DateTime, Utc};
 use db::{Database, Event, Project, ProjectRule, SyncStatus};
 use git::{discover_repositories, get_repository_activities};
@@ -155,7 +153,10 @@ fn sync_all_sources(state: State<AppState>) -> Result<usize, String> {
         }; // DB lock released
 
         if is_first_sync {
-            eprintln!("[Sync] Starting first sync ({} days)", DEFAULT_SYNC_DAYS_BACK);
+            eprintln!(
+                "[Sync] Starting first sync ({} days)",
+                DEFAULT_SYNC_DAYS_BACK
+            );
         } else {
             eprintln!("[Sync] Starting delta sync");
         }
@@ -164,13 +165,15 @@ fn sync_all_sources(state: State<AppState>) -> Result<usize, String> {
         let now_timestamp = now.timestamp();
 
         // Phase 2: Sync calendar (async)
-        let calendar_count = sync_calendar_source(&state, &sync_since_rfc3339, &now.to_rfc3339()).await?;
+        let calendar_count =
+            sync_calendar_source(&state, &sync_since_rfc3339, &now.to_rfc3339()).await?;
 
         // Phase 3: Sync git and browser in background (don't block response)
         let app_state = state.inner().clone();
         std::thread::spawn(move || {
             let git_count = sync_git_source(&app_state, sync_since_timestamp, is_first_sync);
-            let browser_count = sync_browser_source(&app_state, sync_since_timestamp, is_first_sync);
+            let browser_count =
+                sync_browser_source(&app_state, sync_since_timestamp, is_first_sync);
 
             match git_count {
                 Ok(count) => eprintln!("[Git] Synced {} new events", count),
@@ -203,7 +206,10 @@ async fn sync_calendar_source(
     end_date_rfc3339: &str,
 ) -> Result<usize, String> {
     let calendar_events = get_calendar_events_range(start_date_rfc3339, end_date_rfc3339).await?;
-    eprintln!("[Calendar] Fetched {} events from EventKit", calendar_events.len());
+    eprintln!(
+        "[Calendar] Fetched {} events from EventKit",
+        calendar_events.len()
+    );
 
     let db = state
         .db
@@ -220,7 +226,11 @@ async fn sync_calendar_source(
 }
 
 /// Sync git events since a given timestamp
-fn sync_git_source(app_state: &AppState, since_timestamp: i64, is_first_sync: bool) -> Result<usize, String> {
+fn sync_git_source(
+    app_state: &AppState,
+    since_timestamp: i64,
+    is_first_sync: bool,
+) -> Result<usize, String> {
     // Get dev folder from settings
     let dev_folder = {
         let db = app_state
@@ -291,7 +301,11 @@ fn sync_git_source(app_state: &AppState, since_timestamp: i64, is_first_sync: bo
 }
 
 /// Sync browser history since a given timestamp
-fn sync_browser_source(app_state: &AppState, since_timestamp: i64, is_first_sync: bool) -> Result<usize, String> {
+fn sync_browser_source(
+    app_state: &AppState,
+    since_timestamp: i64,
+    is_first_sync: bool,
+) -> Result<usize, String> {
     // Get profile path, discovered repos, and GitHub orgs
     let (profile_path, discovered_repos, github_orgs) = {
         let db = app_state
@@ -313,26 +327,29 @@ fn sync_browser_source(app_state: &AppState, since_timestamp: i64, is_first_sync
             }
         };
 
-        let discovered_repos = db.get_discovered_repository_paths()
+        let discovered_repos = db
+            .get_discovered_repository_paths()
             .map_err(|e| format!("Failed to get discovered repos: {}", e))?;
 
-        let github_orgs = db.get_github_orgs()
+        let github_orgs = db
+            .get_github_orgs()
             .map_err(|e| format!("Failed to get GitHub orgs: {}", e))?;
 
         (profile_path, discovered_repos, github_orgs)
     };
 
     let now = Utc::now();
-    let visits = match browser::get_browser_visits_range(&profile_path, since_timestamp, now.timestamp()) {
-        Ok(visits) => {
-            eprintln!("[Browser] Fetched {} visits from database", visits.len());
-            visits
-        }
-        Err(e) => {
-            eprintln!("[Browser] Error fetching visits: {}", e);
-            return Ok(0);
-        }
-    };
+    let visits =
+        match browser::get_browser_visits_range(&profile_path, since_timestamp, now.timestamp()) {
+            Ok(visits) => {
+                eprintln!("[Browser] Fetched {} visits from database", visits.len());
+                visits
+            }
+            Err(e) => {
+                eprintln!("[Browser] Error fetching visits: {}", e);
+                return Ok(0);
+            }
+        };
 
     let mut new_count = 0;
     let mut error_count = 0;
@@ -615,7 +632,9 @@ pub fn run() {
             db.init_schema()
                 .expect("Failed to initialize database schema");
 
-            app.manage(AppState { db: Arc::new(Mutex::new(db)) });
+            app.manage(AppState {
+                db: Arc::new(Mutex::new(db)),
+            });
 
             // Note: We don't auto-sync on startup because calendar permission requests
             // must happen on the main thread in response to user action.

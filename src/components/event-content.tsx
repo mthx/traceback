@@ -1,37 +1,68 @@
 import { EventDetails } from "@/components/event-details";
 import { Button } from "@/components/ui/button";
-import type { AggregatedGitEvent, AggregatedBrowserEvent, AggregatedRepositoryEvent, Project, StoredEvent } from "@/types/event";
-import { isAggregatedGitEvent, isAggregatedBrowserEvent, isAggregatedRepositoryEvent } from "@/types/event";
+import type {
+  AggregatedGitEvent,
+  AggregatedBrowserEvent,
+  AggregatedRepositoryEvent,
+  Project,
+  StoredEvent,
+} from "@/types/event";
+import {
+  isAggregatedGitEvent,
+  isAggregatedBrowserEvent,
+  isAggregatedRepositoryEvent,
+} from "@/types/event";
 import { invoke } from "@tauri-apps/api/core";
-import { Calendar, Check, GitBranch, Globe, FileText, KanbanSquare, MessageSquare, type LucideIcon } from "lucide-react";
-import { GitHubIcon, GoogleDocsIcon, DropboxIcon, NotionIcon, FigmaIcon } from "@/components/brand-icons";
+import {
+  Calendar,
+  Check,
+  GitBranch,
+  Globe,
+  FileText,
+  KanbanSquare,
+  MessageSquare,
+  type LucideIcon,
+} from "lucide-react";
+import {
+  GitHubIcon,
+  GoogleDocsIcon,
+  DropboxIcon,
+  NotionIcon,
+  FigmaIcon,
+} from "@/components/brand-icons";
 import { useEffect, useState } from "react";
 import { formatDateLong, formatEventTime } from "@/components/calendar-utils";
 import type { BrowserAggregateType } from "@/types/event";
 import type { ComponentType } from "react";
 
-type IconComponent = LucideIcon | ComponentType<{ className?: string; size?: number }>;
+type IconComponent =
+  | LucideIcon
+  | ComponentType<{ className?: string; size?: number }>;
 
 // Get platform-specific icon for collaborative docs
 function getCollaborativeDocIcon(domain: string): IconComponent {
-  if (domain.includes('dropbox.com')) {
+  if (domain.includes("dropbox.com")) {
     return DropboxIcon;
-  } else if (domain === 'docs.google.com') {
+  } else if (domain === "docs.google.com") {
     return GoogleDocsIcon;
-  } else if (domain.includes('notion.')) {
+  } else if (domain.includes("notion.")) {
     return NotionIcon;
-  } else if (domain.includes('monday.com')) {
+  } else if (domain.includes("monday.com")) {
     return KanbanSquare; // Monday.com (boards/docs) - fallback to Lucide
-  } else if (domain.includes('slack.com')) {
+  } else if (domain.includes("slack.com")) {
     return MessageSquare; // Slack - fallback to Lucide
-  } else if (domain.includes('figma.com')) {
+  } else if (domain.includes("figma.com")) {
     return FigmaIcon;
   }
   return FileText; // Default for collaborative docs
 }
 
 // Get the appropriate icon for an event type or browser aggregate
-export function getEventIcon(eventType: string, browserAggregateType?: BrowserAggregateType, domain?: string): IconComponent {
+export function getEventIcon(
+  eventType: string,
+  browserAggregateType?: BrowserAggregateType,
+  domain?: string
+): IconComponent {
   if (eventType === "git") {
     return GitBranch;
   } else if (eventType === "browser_history" && browserAggregateType) {
@@ -66,7 +97,11 @@ export function getContrastingTextColor(hexcolor: string | undefined): string {
 }
 
 interface EventHeaderProps {
-  event: StoredEvent | AggregatedGitEvent | AggregatedBrowserEvent | AggregatedRepositoryEvent;
+  event:
+    | StoredEvent
+    | AggregatedGitEvent
+    | AggregatedBrowserEvent
+    | AggregatedRepositoryEvent;
 }
 
 export function EventHeader({ event }: EventHeaderProps) {
@@ -79,7 +114,10 @@ export function EventHeader({ event }: EventHeaderProps) {
     title = event.repository_name;
     eventType = "git";
     // Check if this is a GitHub repository by looking at origin_url or repository_path
-    if (event.origin_url?.includes('github.com') || event.repository_path?.includes('github.com')) {
+    if (
+      event.origin_url?.includes("github.com") ||
+      event.repository_path?.includes("github.com")
+    ) {
       eventType = "browser_history";
       browserAggregateType = "code_repo";
       domain = "github.com";
@@ -92,7 +130,7 @@ export function EventHeader({ event }: EventHeaderProps) {
     if (firstActivity) {
       try {
         const data = JSON.parse(firstActivity.type_specific_data || "{}");
-        if (data.origin_url?.includes('github.com')) {
+        if (data.origin_url?.includes("github.com")) {
           eventType = "browser_history";
           browserAggregateType = "code_repo";
           domain = "github.com";
@@ -211,7 +249,11 @@ export function EventProjectSelector({
 }
 
 interface EventContentProps {
-  event: StoredEvent | AggregatedGitEvent | AggregatedBrowserEvent | AggregatedRepositoryEvent;
+  event:
+    | StoredEvent
+    | AggregatedGitEvent
+    | AggregatedBrowserEvent
+    | AggregatedRepositoryEvent;
   onAssignmentComplete?: () => void;
   showHeader?: boolean;
   onCreateRule?: (project: Project, event: StoredEvent) => void;

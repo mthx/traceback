@@ -7,17 +7,29 @@ pub struct Event {
     pub id: Option<i64>,
     pub event_type: String,
     pub title: String,
-    #[serde(serialize_with = "serialize_timestamp", deserialize_with = "deserialize_timestamp")]
+    #[serde(
+        serialize_with = "serialize_timestamp",
+        deserialize_with = "deserialize_timestamp"
+    )]
     pub start_date: i64, // Unix timestamp in seconds (UTC)
-    #[serde(serialize_with = "serialize_timestamp", deserialize_with = "deserialize_timestamp")]
+    #[serde(
+        serialize_with = "serialize_timestamp",
+        deserialize_with = "deserialize_timestamp"
+    )]
     pub end_date: i64, // Unix timestamp in seconds (UTC)
     pub external_id: Option<String>,
     pub external_link: Option<String>,
     pub type_specific_data: Option<String>,
     pub project_id: Option<i64>,
-    #[serde(serialize_with = "serialize_timestamp", deserialize_with = "deserialize_timestamp")]
+    #[serde(
+        serialize_with = "serialize_timestamp",
+        deserialize_with = "deserialize_timestamp"
+    )]
     pub created_at: i64, // Unix timestamp in seconds (UTC)
-    #[serde(serialize_with = "serialize_timestamp", deserialize_with = "deserialize_timestamp")]
+    #[serde(
+        serialize_with = "serialize_timestamp",
+        deserialize_with = "deserialize_timestamp"
+    )]
     pub updated_at: i64, // Unix timestamp in seconds (UTC)
 }
 
@@ -26,7 +38,10 @@ pub struct Project {
     pub id: Option<i64>,
     pub name: String,
     pub color: Option<String>,
-    #[serde(serialize_with = "serialize_timestamp", deserialize_with = "deserialize_timestamp")]
+    #[serde(
+        serialize_with = "serialize_timestamp",
+        deserialize_with = "deserialize_timestamp"
+    )]
     pub created_at: i64, // Unix timestamp in seconds (UTC)
 }
 
@@ -36,7 +51,10 @@ pub struct ProjectRule {
     pub project_id: i64,
     pub rule_type: String, // "organizer", "title_pattern", "repository"
     pub match_value: String,
-    #[serde(serialize_with = "serialize_timestamp", deserialize_with = "deserialize_timestamp")]
+    #[serde(
+        serialize_with = "serialize_timestamp",
+        deserialize_with = "deserialize_timestamp"
+    )]
     pub created_at: i64, // Unix timestamp in seconds (UTC)
 }
 
@@ -64,7 +82,10 @@ pub struct GitEventData {
 pub struct WorkDomain {
     pub id: Option<i64>,
     pub domain: String,
-    #[serde(serialize_with = "serialize_timestamp", deserialize_with = "deserialize_timestamp")]
+    #[serde(
+        serialize_with = "serialize_timestamp",
+        deserialize_with = "deserialize_timestamp"
+    )]
     pub created_at: i64,
 }
 
@@ -79,10 +100,16 @@ pub struct BrowserHistoryEventData {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SyncStatus {
-    #[serde(serialize_with = "serialize_optional_timestamp", deserialize_with = "deserialize_optional_timestamp")]
+    #[serde(
+        serialize_with = "serialize_optional_timestamp",
+        deserialize_with = "deserialize_optional_timestamp"
+    )]
     pub last_sync_time: Option<i64>, // Unix timestamp in seconds (UTC)
     pub sync_in_progress: bool,
-    #[serde(serialize_with = "serialize_timestamp", deserialize_with = "deserialize_timestamp")]
+    #[serde(
+        serialize_with = "serialize_timestamp",
+        deserialize_with = "deserialize_timestamp"
+    )]
     pub updated_at: i64, // Unix timestamp in seconds (UTC)
 }
 
@@ -106,7 +133,10 @@ where
         .map_err(serde::de::Error::custom)
 }
 
-fn serialize_optional_timestamp<S>(timestamp: &Option<i64>, serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_optional_timestamp<S>(
+    timestamp: &Option<i64>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
@@ -135,35 +165,10 @@ where
 
 /// Escapes special characters in LIKE patterns to prevent wildcard abuse and SQL injection
 fn escape_like_pattern(s: &str) -> String {
-    s.replace('\\', "\\\\")  // Escape backslash first
-     .replace('%', "\\%")     // Escape percent wildcard
-     .replace('_', "\\_")     // Escape underscore wildcard
-     .replace('\'', "''")     // Escape single quote for SQL
-}
-
-/// Validates domain format to prevent injection attacks
-/// Returns true if domain contains only valid characters (alphanumeric, dots, hyphens)
-fn is_valid_domain(domain: &str) -> bool {
-    // Check length constraints (RFC 1035)
-    if domain.is_empty() || domain.len() > 253 {
-        return false;
-    }
-
-    // Check for SQL/LIKE special characters that could be exploited
-    let dangerous_chars = ['\'', '"', '%', '_', ';', '/', '\\', '\0'];
-    if domain.chars().any(|c| dangerous_chars.contains(&c)) {
-        return false;
-    }
-
-    // Valid domain: alphanumeric, dots, and hyphens only
-    // Cannot start/end with hyphen or dot
-    if domain.starts_with('-') || domain.ends_with('-') ||
-       domain.starts_with('.') || domain.ends_with('.') {
-        return false;
-    }
-
-    // All characters must be alphanumeric, dot, or hyphen
-    domain.chars().all(|c| c.is_alphanumeric() || c == '.' || c == '-')
+    s.replace('\\', "\\\\") // Escape backslash first
+        .replace('%', "\\%") // Escape percent wildcard
+        .replace('_', "\\_") // Escape underscore wildcard
+        .replace('\'', "''") // Escape single quote for SQL
 }
 
 pub struct Database {
@@ -270,11 +275,11 @@ impl Database {
         }
 
         // Initialize default work domains if none exist
-        let has_work_domains: bool = self.conn.query_row(
-            "SELECT COUNT(*) > 0 FROM work_domains",
-            [],
-            |row| row.get(0),
-        )?;
+        let has_work_domains: bool =
+            self.conn
+                .query_row("SELECT COUNT(*) > 0 FROM work_domains", [], |row| {
+                    row.get(0)
+                })?;
 
         if !has_work_domains {
             let default_domains = vec![
@@ -345,14 +350,21 @@ impl Database {
 
     pub fn upsert_event(&self, event: &Event) -> Result<(i64, bool)> {
         let now = chrono::Utc::now().timestamp();
-        let created_at = if event.created_at == 0 { now } else { event.created_at };
+        let created_at = if event.created_at == 0 {
+            now
+        } else {
+            event.created_at
+        };
 
         // Check if event already exists
-        let exists: bool = self.conn.query_row(
-            "SELECT 1 FROM events WHERE event_type = ?1 AND external_id = ?2",
-            rusqlite::params![event.event_type, event.external_id],
-            |_| Ok(true),
-        ).unwrap_or(false);
+        let exists: bool = self
+            .conn
+            .query_row(
+                "SELECT 1 FROM events WHERE event_type = ?1 AND external_id = ?2",
+                rusqlite::params![event.event_type, event.external_id],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
 
         self.conn.execute(
             "INSERT INTO events (event_type, title, start_date, end_date, external_id, external_link, type_specific_data, project_id, created_at, updated_at)
@@ -398,11 +410,7 @@ impl Database {
         Ok(())
     }
 
-    pub fn get_events(
-        &self,
-        start_date: Option<i64>,
-        end_date: Option<i64>,
-    ) -> Result<Vec<Event>> {
+    pub fn get_events(&self, start_date: Option<i64>, end_date: Option<i64>) -> Result<Vec<Event>> {
         // Get work domains once for the SQL filter
         let work_domains = self.get_work_domains()?;
 
@@ -426,10 +434,12 @@ impl Database {
         if !work_domains.is_empty() {
             let domain_conditions: Vec<String> = work_domains
                 .iter()
-                .map(|d| format!(
-                    "type_specific_data LIKE '%\"domain\":\"%{}%' ESCAPE '\\'",
-                    escape_like_pattern(&d.domain)
-                ))
+                .map(|d| {
+                    format!(
+                        "type_specific_data LIKE '%\"domain\":\"%{}%' ESCAPE '\\'",
+                        escape_like_pattern(&d.domain)
+                    )
+                })
                 .collect();
 
             let browser_filter = format!(
@@ -735,52 +745,11 @@ impl Database {
         Ok(domains)
     }
 
-    pub fn add_work_domain(&self, domain: &str) -> Result<i64> {
-        // Validate domain format to prevent SQL injection and other attacks
-        if !is_valid_domain(domain) {
-            return Err(rusqlite::Error::InvalidParameterName(
-                format!("Invalid domain format: '{}'. Domain must contain only alphanumeric characters, dots, and hyphens, and be less than 253 characters.", domain)
-            ));
-        }
-
-        let now = chrono::Utc::now().timestamp();
-
-        self.conn.execute(
-            "INSERT INTO work_domains (domain, created_at) VALUES (?1, ?2)",
-            rusqlite::params![domain, now],
-        )?;
-
-        Ok(self.conn.last_insert_rowid())
-    }
-
-    pub fn remove_work_domain(&self, id: i64) -> Result<()> {
-        self.conn.execute(
-            "DELETE FROM work_domains WHERE id = ?1",
-            rusqlite::params![id],
-        )?;
-        Ok(())
-    }
-
-    pub fn is_work_domain(&self, url: &str) -> Result<bool> {
-        let domain = extract_domain_from_url(url);
-        let domains = self.get_work_domains()?;
-
-        for work_domain in domains {
-            if domain.ends_with(&work_domain.domain) {
-                return Ok(true);
-            }
-        }
-
-        Ok(false)
-    }
-
     // GitHub org operations (stored in settings as JSON array)
     pub fn get_github_orgs(&self) -> Result<Vec<String>> {
         match self.get_setting("github_orgs")? {
-            Some(json_str) => {
-                serde_json::from_str(&json_str)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
-            }
+            Some(json_str) => serde_json::from_str(&json_str)
+                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e))),
             None => Ok(Vec::new()),
         }
     }
@@ -788,9 +757,10 @@ impl Database {
     pub fn add_github_org(&self, org_name: &str) -> Result<()> {
         // Validate org name format (GitHub org names: alphanumeric and hyphens only)
         if org_name.is_empty() || org_name.len() > 39 {
-            return Err(rusqlite::Error::InvalidParameterName(
-                format!("Invalid GitHub org name: '{}'. Must be 1-39 characters.", org_name)
-            ));
+            return Err(rusqlite::Error::InvalidParameterName(format!(
+                "Invalid GitHub org name: '{}'. Must be 1-39 characters.",
+                org_name
+            )));
         }
 
         // GitHub org names can only contain alphanumeric characters and hyphens
@@ -805,9 +775,10 @@ impl Database {
 
         // Check if already exists
         if orgs.contains(&org_name.to_string()) {
-            return Err(rusqlite::Error::InvalidParameterName(
-                format!("GitHub org '{}' already exists.", org_name)
-            ));
+            return Err(rusqlite::Error::InvalidParameterName(format!(
+                "GitHub org '{}' already exists.",
+                org_name
+            )));
         }
 
         orgs.push(org_name.to_string());
@@ -836,7 +807,7 @@ impl Database {
             "SELECT DISTINCT json_extract(type_specific_data, '$.repository_path') as repo_path
              FROM events
              WHERE event_type = 'git'
-             AND json_extract(type_specific_data, '$.repository_path') IS NOT NULL"
+             AND json_extract(type_specific_data, '$.repository_path') IS NOT NULL",
         )?;
 
         let paths = stmt
@@ -984,18 +955,5 @@ impl Database {
         }
 
         Ok(updated_count)
-    }
-}
-
-fn extract_domain_from_url(url: &str) -> String {
-    if let Some(start) = url.find("://") {
-        let after_protocol = &url[start + 3..];
-        if let Some(end) = after_protocol.find('/') {
-            after_protocol[..end].to_string()
-        } else {
-            after_protocol.to_string()
-        }
-    } else {
-        url.to_string()
     }
 }

@@ -1,19 +1,33 @@
 import { EventDetailsDialog } from "@/components/event-details-dialog";
 import { RuleEditDialog } from "@/components/rule-edit-dialog";
-import type { AggregatedGitEvent, AggregatedBrowserEvent, AggregatedRepositoryEvent, Project, StoredEvent } from "@/types/event";
-import {
-  createContext,
-  useContext,
-  useState,
-  type ReactNode,
-} from "react";
+import type {
+  AggregatedGitEvent,
+  AggregatedBrowserEvent,
+  AggregatedRepositoryEvent,
+  Project,
+  StoredEvent,
+} from "@/types/event";
+import { createContext, useContext, useState, type ReactNode } from "react";
 
 interface SharedDialogsContextValue {
-  openRuleDialog: (project: Project, event: StoredEvent, onSaved?: () => void) => void;
-  openEventDialog: (event: StoredEvent | AggregatedGitEvent | AggregatedBrowserEvent | AggregatedRepositoryEvent, onAssignmentComplete?: () => void) => void;
+  openRuleDialog: (
+    project: Project,
+    event: StoredEvent,
+    onSaved?: () => void
+  ) => void;
+  openEventDialog: (
+    event:
+      | StoredEvent
+      | AggregatedGitEvent
+      | AggregatedBrowserEvent
+      | AggregatedRepositoryEvent,
+    onAssignmentComplete?: () => void
+  ) => void;
 }
 
-const SharedDialogsContext = createContext<SharedDialogsContextValue | null>(null);
+const SharedDialogsContext = createContext<SharedDialogsContextValue | null>(
+  null
+);
 
 export function useRuleDialog() {
   const context = useContext(SharedDialogsContext);
@@ -35,17 +49,29 @@ interface SharedDialogsProviderProps {
   children: ReactNode;
 }
 
-export function SharedDialogsProvider({ children }: SharedDialogsProviderProps) {
+export function SharedDialogsProvider({
+  children,
+}: SharedDialogsProviderProps) {
   // Rule dialog state
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
   const [ruleProject, setRuleProject] = useState<Project | null>(null);
   const [ruleEvent, setRuleEvent] = useState<StoredEvent | null>(null);
-  const [ruleOnSaved, setRuleOnSaved] = useState<(() => void) | undefined>(undefined);
+  const [ruleOnSaved, setRuleOnSaved] = useState<(() => void) | undefined>(
+    undefined
+  );
 
   // Event dialog state
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
-  const [dialogEvent, setDialogEvent] = useState<StoredEvent | AggregatedGitEvent | AggregatedBrowserEvent | AggregatedRepositoryEvent | null>(null);
-  const [eventOnComplete, setEventOnComplete] = useState<(() => void) | undefined>(undefined);
+  const [dialogEvent, setDialogEvent] = useState<
+    | StoredEvent
+    | AggregatedGitEvent
+    | AggregatedBrowserEvent
+    | AggregatedRepositoryEvent
+    | null
+  >(null);
+  const [eventOnComplete, setEventOnComplete] = useState<
+    (() => void) | undefined
+  >(undefined);
 
   function openRuleDialog(
     project: Project,
@@ -66,7 +92,11 @@ export function SharedDialogsProvider({ children }: SharedDialogsProviderProps) 
   }
 
   function openEventDialog(
-    event: StoredEvent | AggregatedGitEvent | AggregatedBrowserEvent | AggregatedRepositoryEvent,
+    event:
+      | StoredEvent
+      | AggregatedGitEvent
+      | AggregatedBrowserEvent
+      | AggregatedRepositoryEvent,
     onAssignmentComplete?: () => void
   ) {
     setDialogEvent(event);

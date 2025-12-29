@@ -89,8 +89,8 @@ fn query_visits(
         eprintln!("[Browser:DEBUG] Using URI: {}", db_uri);
     }
 
-    let conn = Connection::open(&db_uri)
-        .map_err(|e| format!("Failed to open places database: {}", e))?;
+    let conn =
+        Connection::open(&db_uri).map_err(|e| format!("Failed to open places database: {}", e))?;
 
     // Verify this is a Firefox/Zen database
     if debug {
@@ -118,11 +118,15 @@ fn query_visits(
     let end_micros = end_timestamp * 1_000_000;
 
     if debug {
-        eprintln!("[Browser:DEBUG] Querying visits between {} and {} (microseconds)", start_micros, end_micros);
+        eprintln!(
+            "[Browser:DEBUG] Querying visits between {} and {} (microseconds)",
+            start_micros, end_micros
+        );
     }
 
-    let mut stmt = conn.prepare(
-        "SELECT
+    let mut stmt = conn
+        .prepare(
+            "SELECT
             moz_places.url,
             moz_places.title,
             moz_historyvisits.visit_date,
@@ -174,8 +178,9 @@ fn query_visits(
            -- Email clients (specific message URLs)
            AND moz_places.url NOT LIKE '%mail.google.com/mail/u/%/#%'
            AND moz_places.url NOT LIKE '%outlook.live.com/mail/%/inbox/id/%'
-         ORDER BY moz_historyvisits.visit_date DESC"
-    ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+         ORDER BY moz_historyvisits.visit_date DESC",
+        )
+        .map_err(|e| format!("Failed to prepare query: {}", e))?;
 
     let visits = stmt
         .query_map(rusqlite::params![start_micros, end_micros], |row| {

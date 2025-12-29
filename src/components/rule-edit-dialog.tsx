@@ -40,7 +40,10 @@ export function RuleEditDialog({
   useEffect(() => {
     if (rule) {
       setFormData({
-        ruleType: rule.rule_type as "organizer" | "title_pattern" | "repository",
+        ruleType: rule.rule_type as
+          | "organizer"
+          | "title_pattern"
+          | "repository",
         matchValue: rule.match_value,
       });
     } else if (event) {
@@ -157,9 +160,7 @@ export function RuleEditDialog({
               }
             />
           </div>
-          {error && (
-            <div className="text-sm text-destructive">{error}</div>
-          )}
+          {error && <div className="text-sm text-destructive">{error}</div>}
         </div>
         <DialogFooter>
           <Button

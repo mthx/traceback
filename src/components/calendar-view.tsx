@@ -15,9 +15,24 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import type { StoredEvent, Project, AggregatedGitEvent, AggregatedBrowserEvent, AggregatedRepositoryEvent } from "@/types/event";
-import { aggregateGitEvents, aggregateBrowserEvents, aggregateRepositoryEvents } from "@/types/event";
-import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import type {
+  StoredEvent,
+  Project,
+  AggregatedGitEvent,
+  AggregatedBrowserEvent,
+  AggregatedRepositoryEvent,
+} from "@/types/event";
+import {
+  aggregateGitEvents,
+  aggregateBrowserEvents,
+  aggregateRepositoryEvents,
+} from "@/types/event";
+import {
+  Tooltip,
+  TooltipProvider,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/components/ui/tooltip";
 import { EventBlock } from "@/components/event-block";
 import { MonthEventBlock } from "@/components/month-event-block";
 import { CalendarEventTooltipContent } from "@/components/event-tooltip-content";
@@ -66,7 +81,13 @@ interface CalendarViewContextValue {
   events: StoredEvent[];
   projectMap?: Map<number, Project>;
   showWeekends: boolean;
-  onEventAssign?: (event: StoredEvent | AggregatedGitEvent | AggregatedBrowserEvent | AggregatedRepositoryEvent) => void;
+  onEventAssign?: (
+    event:
+      | StoredEvent
+      | AggregatedGitEvent
+      | AggregatedBrowserEvent
+      | AggregatedRepositoryEvent
+  ) => void;
   onAssignmentComplete?: () => void;
   githubOrgs: string[];
 }
@@ -94,7 +115,13 @@ interface CalendarViewProviderProps {
   onDateChange?: (date: Date) => void;
   projectMap?: Map<number, Project>;
   showWeekends?: boolean;
-  onEventAssign?: (event: StoredEvent | AggregatedGitEvent | AggregatedBrowserEvent | AggregatedRepositoryEvent) => void;
+  onEventAssign?: (
+    event:
+      | StoredEvent
+      | AggregatedGitEvent
+      | AggregatedBrowserEvent
+      | AggregatedRepositoryEvent
+  ) => void;
   onAssignmentComplete?: () => void;
 }
 
@@ -260,12 +287,16 @@ function isAllDayEvent(event: StoredEvent): boolean {
   }
 }
 
-function getEventsForDay(events: StoredEvent[], date: Date, githubOrgs: string[] = []): {
-  allDayEvents: StoredEvent[],
-  calendarEvents: StoredEvent[],
-  gitAggregates: AggregatedGitEvent[],
-  browserAggregates: AggregatedBrowserEvent[],
-  repositoryAggregates: AggregatedRepositoryEvent[]
+function getEventsForDay(
+  events: StoredEvent[],
+  date: Date,
+  githubOrgs: string[] = []
+): {
+  allDayEvents: StoredEvent[];
+  calendarEvents: StoredEvent[];
+  gitAggregates: AggregatedGitEvent[];
+  browserAggregates: AggregatedBrowserEvent[];
+  repositoryAggregates: AggregatedRepositoryEvent[];
 } {
   const dayStart = new Date(date);
   dayStart.setHours(0, 0, 0, 0);
@@ -282,7 +313,9 @@ function getEventsForDay(events: StoredEvent[], date: Date, githubOrgs: string[]
   });
 
   const allDayEvents = allCalendarEvents.filter(isAllDayEvent);
-  const calendarEvents = allCalendarEvents.filter(event => !isAllDayEvent(event));
+  const calendarEvents = allCalendarEvents.filter(
+    (event) => !isAllDayEvent(event)
+  );
 
   // Aggregate repository events (unified git + browser)
   const allRepositoryAggregates = aggregateRepositoryEvents(events);
@@ -329,14 +362,20 @@ function getEventsForDay(events: StoredEvent[], date: Date, githubOrgs: string[]
     return inDay && !hasCoveredRepoPath;
   });
 
-  return { allDayEvents, calendarEvents, gitAggregates, browserAggregates, repositoryAggregates };
+  return {
+    allDayEvents,
+    calendarEvents,
+    gitAggregates,
+    browserAggregates,
+    repositoryAggregates,
+  };
 }
 
 type DisplayItem =
-  | { type: 'calendar'; event: StoredEvent }
-  | { type: 'git'; aggregate: AggregatedGitEvent }
-  | { type: 'browser'; aggregate: AggregatedBrowserEvent }
-  | { type: 'repository'; aggregate: AggregatedRepositoryEvent };
+  | { type: "calendar"; event: StoredEvent }
+  | { type: "git"; aggregate: AggregatedGitEvent }
+  | { type: "browser"; aggregate: AggregatedBrowserEvent }
+  | { type: "repository"; aggregate: AggregatedRepositoryEvent };
 
 function calculateEventPositions(
   calendarEvents: StoredEvent[],
@@ -348,36 +387,46 @@ function calculateEventPositions(
 
   // Combine calendar events and git/browser/repository aggregates into display items
   const displayItems: DisplayItem[] = [
-    ...calendarEvents.map(event => ({ type: 'calendar' as const, event })),
-    ...repositoryAggregates.map(aggregate => ({ type: 'repository' as const, aggregate })),
-    ...gitAggregates.map(aggregate => ({ type: 'git' as const, aggregate })),
-    ...browserAggregates.map(aggregate => ({ type: 'browser' as const, aggregate })),
+    ...calendarEvents.map((event) => ({ type: "calendar" as const, event })),
+    ...repositoryAggregates.map((aggregate) => ({
+      type: "repository" as const,
+      aggregate,
+    })),
+    ...gitAggregates.map((aggregate) => ({ type: "git" as const, aggregate })),
+    ...browserAggregates.map((aggregate) => ({
+      type: "browser" as const,
+      aggregate,
+    })),
   ];
 
   // Sort by start time
   const sortedItems = displayItems.sort((a, b) => {
-    const aStart = a.type === 'calendar'
-      ? new Date(a.event.start_date).getTime()
-      : new Date(a.aggregate.start_date).getTime();
-    const bStart = b.type === 'calendar'
-      ? new Date(b.event.start_date).getTime()
-      : new Date(b.aggregate.start_date).getTime();
+    const aStart =
+      a.type === "calendar"
+        ? new Date(a.event.start_date).getTime()
+        : new Date(a.aggregate.start_date).getTime();
+    const bStart =
+      b.type === "calendar"
+        ? new Date(b.event.start_date).getTime()
+        : new Date(b.aggregate.start_date).getTime();
     return aStart - bStart;
   });
 
   const columns: DisplayItem[][] = [];
 
   sortedItems.forEach((item) => {
-    const itemStart = item.type === 'calendar'
-      ? new Date(item.event.start_date)
-      : new Date(item.aggregate.start_date);
+    const itemStart =
+      item.type === "calendar"
+        ? new Date(item.event.start_date)
+        : new Date(item.aggregate.start_date);
 
     let placed = false;
     for (let col = 0; col < columns.length; col++) {
       const lastItem = columns[col][columns[col].length - 1];
-      const lastEnd = lastItem.type === 'calendar'
-        ? new Date(lastItem.event.end_date)
-        : new Date(lastItem.aggregate.end_date);
+      const lastEnd =
+        lastItem.type === "calendar"
+          ? new Date(lastItem.event.end_date)
+          : new Date(lastItem.aggregate.end_date);
 
       if (lastEnd <= itemStart) {
         columns[col].push(item);
@@ -393,7 +442,7 @@ function calculateEventPositions(
   const blocks: EventBlock[] = [];
   columns.forEach((col, colIndex) => {
     col.forEach((item) => {
-      if (item.type === 'calendar') {
+      if (item.type === "calendar") {
         const eventStart = new Date(item.event.start_date);
         const eventEnd = new Date(item.event.end_date);
 
@@ -409,7 +458,7 @@ function calculateEventPositions(
           totalColumns: columns.length,
           isGitAggregate: false,
         });
-      } else if (item.type === 'git') {
+      } else if (item.type === "git") {
         // Git aggregate
         const eventStart = new Date(item.aggregate.start_date);
         const eventEnd = new Date(item.aggregate.end_date);
@@ -421,13 +470,15 @@ function calculateEventPositions(
         // Create a synthetic StoredEvent for rendering
         const syntheticEvent: StoredEvent = {
           id: -1, // Use negative ID to indicate synthetic
-          event_type: 'git',
-          title: item.aggregate.repository_name.split('/').pop() || item.aggregate.repository_name,
+          event_type: "git",
+          title:
+            item.aggregate.repository_name.split("/").pop() ||
+            item.aggregate.repository_name,
           start_date: item.aggregate.start_date,
           end_date: item.aggregate.end_date,
           project_id: item.aggregate.project_id,
-          created_at: '',
-          updated_at: '',
+          created_at: "",
+          updated_at: "",
         };
 
         blocks.push({
@@ -439,7 +490,7 @@ function calculateEventPositions(
           isGitAggregate: true,
           gitAggregate: item.aggregate,
         });
-      } else if (item.type === 'browser') {
+      } else if (item.type === "browser") {
         // Browser aggregate
         const eventStart = new Date(item.aggregate.start_date);
         const eventEnd = new Date(item.aggregate.end_date);
@@ -451,13 +502,13 @@ function calculateEventPositions(
         // Create a synthetic StoredEvent for rendering
         const syntheticEvent: StoredEvent = {
           id: -2, // Use -2 to indicate browser synthetic
-          event_type: 'browser_history',
+          event_type: "browser_history",
           title: item.aggregate.title,
           start_date: item.aggregate.start_date,
           end_date: item.aggregate.end_date,
           project_id: item.aggregate.project_id,
-          created_at: '',
-          updated_at: '',
+          created_at: "",
+          updated_at: "",
         };
 
         blocks.push({
@@ -481,13 +532,13 @@ function calculateEventPositions(
         // Create a synthetic StoredEvent for rendering
         const syntheticEvent: StoredEvent = {
           id: -3, // Use -3 to indicate repository synthetic
-          event_type: 'git', // Primary type is git since it's repo-focused
+          event_type: "git", // Primary type is git since it's repo-focused
           title: item.aggregate.repository_name,
           start_date: item.aggregate.start_date,
           end_date: item.aggregate.end_date,
           project_id: item.aggregate.project_id,
-          created_at: '',
-          updated_at: '',
+          created_at: "",
+          updated_at: "",
         };
 
         blocks.push({
@@ -515,9 +566,7 @@ export function CalendarDateLabel() {
       content = (
         <div className="flex flex-col">
           <div>
-            <span className="font-semibold">
-              {formatMonthDay(currentDate)}
-            </span>
+            <span className="font-semibold">{formatMonthDay(currentDate)}</span>
             <span className="font-normal">, {currentDate.getFullYear()}</span>
           </div>
           <div className="text-sm font-normal text-muted-foreground">
@@ -530,10 +579,11 @@ export function CalendarDateLabel() {
     case "month":
       content = (
         <div>
-          <span className="font-semibold">
-            {formatMonth(currentDate)}
+          <span className="font-semibold">{formatMonth(currentDate)}</span>
+          <span className="font-normal text-muted-foreground">
+            {" "}
+            {currentDate.getFullYear()}
           </span>
-          <span className="font-normal text-muted-foreground"> {currentDate.getFullYear()}</span>
         </div>
       );
       break;
@@ -646,7 +696,6 @@ export function CalendarGrid() {
   );
 }
 
-
 // All-day events row component
 function AllDayEventsRow({
   events,
@@ -665,9 +714,10 @@ function AllDayEventsRow({
     <div className="px-2 py-1 min-h-8">
       <div className="flex flex-col gap-0.5 overflow-hidden">
         {events.map((event) => {
-          const project = event.project_id && projectMap
-            ? projectMap.get(event.project_id)
-            : null;
+          const project =
+            event.project_id && projectMap
+              ? projectMap.get(event.project_id)
+              : null;
           const eventColor = project?.color || "#94a3b8";
 
           return (
@@ -707,9 +757,21 @@ function DayView({
   date: Date;
   projectMap?: Map<number, Project>;
 }) {
-  const { onEventAssign, onAssignmentComplete, githubOrgs } = useCalendarViewContext();
-  const { allDayEvents, calendarEvents, gitAggregates, browserAggregates, repositoryAggregates } = getEventsForDay(events, date, githubOrgs);
-  const eventBlocks = calculateEventPositions(calendarEvents, gitAggregates, browserAggregates, repositoryAggregates);
+  const { onEventAssign, onAssignmentComplete, githubOrgs } =
+    useCalendarViewContext();
+  const {
+    allDayEvents,
+    calendarEvents,
+    gitAggregates,
+    browserAggregates,
+    repositoryAggregates,
+  } = getEventsForDay(events, date, githubOrgs);
+  const eventBlocks = calculateEventPositions(
+    calendarEvents,
+    gitAggregates,
+    browserAggregates,
+    repositoryAggregates
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
@@ -732,54 +794,76 @@ function DayView({
 
       <div ref={scrollRef} className="flex-1 overflow-auto select-none">
         <div className="relative">
-        {hours.map((hour) => (
-          <div
-            key={hour}
-            className="h-15 border-b border-neutral-200 dark:border-neutral-800 flex items-start px-2 text-xs text-muted-foreground"
-          >
-            {hour.toString().padStart(2, "0") + ":00"}{" "}
-          </div>
-        ))}
+          {hours.map((hour) => (
+            <div
+              key={hour}
+              className="h-15 border-b border-neutral-200 dark:border-neutral-800 flex items-start px-2 text-xs text-muted-foreground"
+            >
+              {hour.toString().padStart(2, "0") + ":00"}{" "}
+            </div>
+          ))}
 
-        <div className="absolute inset-0 left-16">
-          <TooltipProvider>
-            {eventBlocks.map((block, idx) => {
-              const width = `${100 / block.totalColumns}%`;
-              const left = `${(block.column * 100) / block.totalColumns}%`;
+          <div className="absolute inset-0 left-16">
+            <TooltipProvider>
+              {eventBlocks.map((block, idx) => {
+                const width = `${100 / block.totalColumns}%`;
+                const left = `${(block.column * 100) / block.totalColumns}%`;
 
-              return (
-                <EventBlock
-                  key={idx}
-                  event={block.isGitAggregate || block.isBrowserAggregate || block.isRepositoryAggregate ? undefined : block.event}
-                  gitAggregate={block.isGitAggregate ? block.gitAggregate : undefined}
-                  browserAggregate={block.isBrowserAggregate ? block.browserAggregate : undefined}
-                  repositoryAggregate={block.isRepositoryAggregate ? block.repositoryAggregate : undefined}
-                  projectMap={projectMap}
-                  position={{
-                    top: block.top,
-                    height: block.height,
-                    left,
-                    width,
-                  }}
-                  onClick={() => {
-                    if (onEventAssign) {
-                      if (block.isGitAggregate && block.gitAggregate) {
-                        onEventAssign(block.gitAggregate);
-                      } else if (block.isBrowserAggregate && block.browserAggregate) {
-                        onEventAssign(block.browserAggregate);
-                      } else if (block.isRepositoryAggregate && block.repositoryAggregate) {
-                        onEventAssign(block.repositoryAggregate);
-                      } else {
-                        onEventAssign(block.event);
-                      }
+                return (
+                  <EventBlock
+                    key={idx}
+                    event={
+                      block.isGitAggregate ||
+                      block.isBrowserAggregate ||
+                      block.isRepositoryAggregate
+                        ? undefined
+                        : block.event
                     }
-                  }}
-                  onAssignmentComplete={onAssignmentComplete}
-                />
-              );
-            })}
-          </TooltipProvider>
-        </div>
+                    gitAggregate={
+                      block.isGitAggregate ? block.gitAggregate : undefined
+                    }
+                    browserAggregate={
+                      block.isBrowserAggregate
+                        ? block.browserAggregate
+                        : undefined
+                    }
+                    repositoryAggregate={
+                      block.isRepositoryAggregate
+                        ? block.repositoryAggregate
+                        : undefined
+                    }
+                    projectMap={projectMap}
+                    position={{
+                      top: block.top,
+                      height: block.height,
+                      left,
+                      width,
+                    }}
+                    onClick={() => {
+                      if (onEventAssign) {
+                        if (block.isGitAggregate && block.gitAggregate) {
+                          onEventAssign(block.gitAggregate);
+                        } else if (
+                          block.isBrowserAggregate &&
+                          block.browserAggregate
+                        ) {
+                          onEventAssign(block.browserAggregate);
+                        } else if (
+                          block.isRepositoryAggregate &&
+                          block.repositoryAggregate
+                        ) {
+                          onEventAssign(block.repositoryAggregate);
+                        } else {
+                          onEventAssign(block.event);
+                        }
+                      }
+                    }}
+                    onAssignmentComplete={onAssignmentComplete}
+                  />
+                );
+              })}
+            </TooltipProvider>
+          </div>
         </div>
       </div>
     </div>
@@ -797,7 +881,8 @@ function WeekView({
   projectMap?: Map<number, Project>;
   showWeekends: boolean;
 }) {
-  const { onEventAssign, onAssignmentComplete, githubOrgs } = useCalendarViewContext();
+  const { onEventAssign, onAssignmentComplete, githubOrgs } =
+    useCalendarViewContext();
   const weekDays = getWeekDays(date, showWeekends);
   const hours = Array.from({ length: 24 }, (_, i) => i);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -811,11 +896,16 @@ function WeekView({
         {/* Day names row */}
         <div
           className="grid"
-          style={{ gridTemplateColumns: `64px repeat(${weekDays.length}, 1fr)` }}
+          style={{
+            gridTemplateColumns: `64px repeat(${weekDays.length}, 1fr)`,
+          }}
         >
           <div className="p-2 text-xs font-medium"></div>
           {weekDays.map((day) => (
-            <div key={day.toISOString()} className="p-2 border-l border-neutral-200 dark:border-neutral-800 first:border-l-0">
+            <div
+              key={day.toISOString()}
+              className="p-2 border-l border-neutral-200 dark:border-neutral-800 first:border-l-0"
+            >
               <div className="flex text-gray-500 items-baseline justify-end gap-1.5">
                 <div
                   className={`text-base ${
@@ -833,14 +923,21 @@ function WeekView({
         {/* All-day events row */}
         <div
           className="grid"
-          style={{ gridTemplateColumns: `64px repeat(${weekDays.length}, 1fr)` }}
+          style={{
+            gridTemplateColumns: `64px repeat(${weekDays.length}, 1fr)`,
+          }}
         >
-          <div className="p-2 text-xs font-medium text-muted-foreground">All day</div>
+          <div className="p-2 text-xs font-medium text-muted-foreground">
+            All day
+          </div>
           <TooltipProvider>
             {weekDays.map((day) => {
               const { allDayEvents } = getEventsForDay(events, day, githubOrgs);
               return (
-                <div key={`allday-${day.toISOString()}`} className="border-l border-neutral-200 dark:border-neutral-800 first:border-l-0 overflow-hidden min-w-0">
+                <div
+                  key={`allday-${day.toISOString()}`}
+                  className="border-l border-neutral-200 dark:border-neutral-800 first:border-l-0 overflow-hidden min-w-0"
+                >
                   <AllDayEventsRow
                     events={allDayEvents}
                     projectMap={projectMap}
@@ -860,7 +957,9 @@ function WeekView({
       <div ref={scrollRef} className="flex-1 overflow-auto select-none">
         <div
           className="grid"
-          style={{ gridTemplateColumns: `64px repeat(${weekDays.length}, 1fr)` }}
+          style={{
+            gridTemplateColumns: `64px repeat(${weekDays.length}, 1fr)`,
+          }}
         >
           <div>
             {hours.map((hour) => (
@@ -874,61 +973,93 @@ function WeekView({
           </div>
 
           {weekDays.map((day) => {
-            const { calendarEvents, gitAggregates, browserAggregates, repositoryAggregates } = getEventsForDay(events, day, githubOrgs);
-          const eventBlocks = calculateEventPositions(calendarEvents, gitAggregates, browserAggregates, repositoryAggregates);
+            const {
+              calendarEvents,
+              gitAggregates,
+              browserAggregates,
+              repositoryAggregates,
+            } = getEventsForDay(events, day, githubOrgs);
+            const eventBlocks = calculateEventPositions(
+              calendarEvents,
+              gitAggregates,
+              browserAggregates,
+              repositoryAggregates
+            );
 
-          return (
-            <div
-              key={day.toISOString()}
-              className="relative border-r border-neutral-200 dark:border-neutral-800 last:border-r-0"
-            >
-              {hours.map((hour) => (
-                <div
-                  key={hour}
-                  className="h-15 border-b border-neutral-200 dark:border-neutral-800 last:border-b-0"
-                ></div>
-              ))}
+            return (
+              <div
+                key={day.toISOString()}
+                className="relative border-r border-neutral-200 dark:border-neutral-800 last:border-r-0"
+              >
+                {hours.map((hour) => (
+                  <div
+                    key={hour}
+                    className="h-15 border-b border-neutral-200 dark:border-neutral-800 last:border-b-0"
+                  ></div>
+                ))}
 
-              <TooltipProvider>
-                {eventBlocks.map((block, idx) => {
-                  const width = `${100 / block.totalColumns}%`;
-                  const left = `${(block.column * 100) / block.totalColumns}%`;
+                <TooltipProvider>
+                  {eventBlocks.map((block, idx) => {
+                    const width = `${100 / block.totalColumns}%`;
+                    const left = `${(block.column * 100) / block.totalColumns}%`;
 
-                  return (
-                    <EventBlock
-                      key={idx}
-                      event={block.isGitAggregate || block.isBrowserAggregate || block.isRepositoryAggregate ? undefined : block.event}
-                      gitAggregate={block.isGitAggregate ? block.gitAggregate : undefined}
-                      browserAggregate={block.isBrowserAggregate ? block.browserAggregate : undefined}
-                      repositoryAggregate={block.isRepositoryAggregate ? block.repositoryAggregate : undefined}
-                      projectMap={projectMap}
-                      position={{
-                        top: block.top,
-                        height: block.height,
-                        left,
-                        width,
-                      }}
-                      onClick={() => {
-                        if (onEventAssign) {
-                          if (block.isGitAggregate && block.gitAggregate) {
-                            onEventAssign(block.gitAggregate);
-                          } else if (block.isBrowserAggregate && block.browserAggregate) {
-                            onEventAssign(block.browserAggregate);
-                          } else if (block.isRepositoryAggregate && block.repositoryAggregate) {
-                            onEventAssign(block.repositoryAggregate);
-                          } else {
-                            onEventAssign(block.event);
-                          }
+                    return (
+                      <EventBlock
+                        key={idx}
+                        event={
+                          block.isGitAggregate ||
+                          block.isBrowserAggregate ||
+                          block.isRepositoryAggregate
+                            ? undefined
+                            : block.event
                         }
-                      }}
-                      onAssignmentComplete={onAssignmentComplete}
-                    />
-                  );
-                })}
-              </TooltipProvider>
-            </div>
-          );
-        })}
+                        gitAggregate={
+                          block.isGitAggregate ? block.gitAggregate : undefined
+                        }
+                        browserAggregate={
+                          block.isBrowserAggregate
+                            ? block.browserAggregate
+                            : undefined
+                        }
+                        repositoryAggregate={
+                          block.isRepositoryAggregate
+                            ? block.repositoryAggregate
+                            : undefined
+                        }
+                        projectMap={projectMap}
+                        position={{
+                          top: block.top,
+                          height: block.height,
+                          left,
+                          width,
+                        }}
+                        onClick={() => {
+                          if (onEventAssign) {
+                            if (block.isGitAggregate && block.gitAggregate) {
+                              onEventAssign(block.gitAggregate);
+                            } else if (
+                              block.isBrowserAggregate &&
+                              block.browserAggregate
+                            ) {
+                              onEventAssign(block.browserAggregate);
+                            } else if (
+                              block.isRepositoryAggregate &&
+                              block.repositoryAggregate
+                            ) {
+                              onEventAssign(block.repositoryAggregate);
+                            } else {
+                              onEventAssign(block.event);
+                            }
+                          }
+                        }}
+                        onAssignmentComplete={onAssignmentComplete}
+                      />
+                    );
+                  })}
+                </TooltipProvider>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -952,7 +1083,13 @@ function MonthView({
 
   showWeekends: boolean;
 }) {
-  const { setViewType, setCurrentDate, onEventAssign, onAssignmentComplete, githubOrgs } = useCalendarViewContext();
+  const {
+    setViewType,
+    setCurrentDate,
+    onEventAssign,
+    onAssignmentComplete,
+    githubOrgs,
+  } = useCalendarViewContext();
 
   const monthDays = getMonthDays(date, showWeekends);
 
@@ -1021,16 +1158,26 @@ function MonthView({
         }}
       >
         {monthDays.map((day) => {
-          const { calendarEvents, gitAggregates } = getEventsForDay(events, day, githubOrgs);
+          const { calendarEvents, gitAggregates } = getEventsForDay(
+            events,
+            day,
+            githubOrgs
+          );
 
           // Combine calendar events and git aggregates for display
           type MonthDisplayItem =
-            | { type: 'calendar'; event: StoredEvent }
-            | { type: 'git'; aggregate: AggregatedGitEvent };
+            | { type: "calendar"; event: StoredEvent }
+            | { type: "git"; aggregate: AggregatedGitEvent };
 
           const allDisplayItems: MonthDisplayItem[] = [
-            ...calendarEvents.map(event => ({ type: 'calendar' as const, event })),
-            ...gitAggregates.map(aggregate => ({ type: 'git' as const, aggregate })),
+            ...calendarEvents.map((event) => ({
+              type: "calendar" as const,
+              event,
+            })),
+            ...gitAggregates.map((aggregate) => ({
+              type: "git" as const,
+              aggregate,
+            })),
           ];
 
           const needPlaceholder = allDisplayItems.length > maxEvents;
@@ -1064,13 +1211,19 @@ function MonthView({
                 <TooltipProvider>
                   {visibleItems.map((item) => (
                     <MonthEventBlock
-                      key={item.type === 'git' ? `git-${item.aggregate.id}` : item.event.id}
-                      event={item.type === 'calendar' ? item.event : undefined}
-                      gitAggregate={item.type === 'git' ? item.aggregate : undefined}
+                      key={
+                        item.type === "git"
+                          ? `git-${item.aggregate.id}`
+                          : item.event.id
+                      }
+                      event={item.type === "calendar" ? item.event : undefined}
+                      gitAggregate={
+                        item.type === "git" ? item.aggregate : undefined
+                      }
                       projectMap={projectMap}
                       onClick={() => {
                         if (onEventAssign) {
-                          if (item.type === 'git') {
+                          if (item.type === "git") {
                             onEventAssign(item.aggregate);
                           } else {
                             onEventAssign(item.event);
