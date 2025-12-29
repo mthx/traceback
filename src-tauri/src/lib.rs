@@ -640,41 +640,38 @@ pub fn run() {
             // must happen on the main thread in response to user action.
             // Users should click "Sync Now" button to trigger the first sync.
 
-            // Add dev menu items (dev mode only)
-            #[cfg(debug_assertions)]
-            {
-                use tauri::menu::PredefinedMenuItem;
+            // Create application menu
+            use tauri::menu::PredefinedMenuItem;
 
-                // Create Application menu with Quit
-                let app_menu = SubmenuBuilder::new(app, "Traceback")
-                    .item(&PredefinedMenuItem::quit(app, None)?)
-                    .build()?;
+            // Create Application menu with Quit
+            let app_menu = SubmenuBuilder::new(app, "Traceback")
+                .item(&PredefinedMenuItem::quit(app, None)?)
+                .build()?;
 
-                // Create File menu with reset item
-                let file_menu = SubmenuBuilder::new(app, "File")
-                    .separator()
-                    .item(&PredefinedMenuItem::close_window(app, None)?)
-                    .build()?;
+            // Create File menu
+            let file_menu = SubmenuBuilder::new(app, "File")
+                .separator()
+                .item(&PredefinedMenuItem::close_window(app, None)?)
+                .build()?;
 
-                // Create Edit menu with standard items
-                let edit_menu = SubmenuBuilder::new(app, "Edit")
-                    .undo()
-                    .redo()
-                    .separator()
-                    .cut()
-                    .copy()
-                    .paste()
-                    .select_all()
-                    .build()?;
+            // Create Edit menu with standard items
+            let edit_menu = SubmenuBuilder::new(app, "Edit")
+                .undo()
+                .redo()
+                .separator()
+                .cut()
+                .copy()
+                .paste()
+                .select_all()
+                .build()?;
 
-                let menu = MenuBuilder::new(app)
-                    .item(&app_menu)
-                    .item(&file_menu)
-                    .item(&edit_menu)
-                    .build()?;
+            let menu = MenuBuilder::new(app)
+                .item(&app_menu)
+                .item(&file_menu)
+                .item(&edit_menu)
+                .build()?;
 
-                app.set_menu(menu)?;
-            }
+            app.set_menu(menu)?;
 
             Ok(())
         })
