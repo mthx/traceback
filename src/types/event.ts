@@ -10,6 +10,17 @@ export interface StoredEvent {
   external_link?: string;
   type_specific_data?: string;
   project_id?: number;
+  organizer_id?: number;
+  repository_path?: string;
+  domain?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Contact {
+  id: number;
+  name: string;
+  email?: string;
   created_at: string;
   updated_at: string;
 }

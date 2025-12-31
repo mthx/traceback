@@ -11,6 +11,7 @@ pub struct CalendarEvent {
     pub is_all_day: bool,
     pub attendees: Vec<String>,
     pub organizer: Option<String>,
+    pub organizer_email: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -103,10 +104,21 @@ pub async fn get_calendar_events_range(
                 }
             }
 
-            // Get organizer
-            let organizer = event
-                .organizer()
-                .and_then(|org| org.name().map(|n| n.to_string()));
+            // Get organizer name and email
+            let (organizer, organizer_email) = if let Some(org) = event.organizer() {
+                let name = org.name().map(|n| n.to_string());
+                // Try to get email from URL (format: mailto:email@example.com)
+                let email = org
+                    .URL()
+                    .absoluteString()
+                    .and_then(|url_string| {
+                        let url_str = url_string.to_string();
+                        url_str.strip_prefix("mailto:").map(|e| e.to_string())
+                    });
+                (name, email)
+            } else {
+                (None, None)
+            };
 
             result.push(CalendarEvent {
                 event_id,
@@ -118,6 +130,7 @@ pub async fn get_calendar_events_range(
                 is_all_day,
                 attendees,
                 organizer,
+                organizer_email,
             });
         }
 

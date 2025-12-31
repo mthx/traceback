@@ -55,6 +55,23 @@ pub fn sync_single_event(db: &Database, cal_event: &CalendarEvent) -> Result<usi
         urlencoding::encode(&cal_event.title)
     ));
 
+    // Create or find organizer contact
+    let organizer_id = if let Some(org_name) = &cal_event.organizer {
+        let email = cal_event.organizer_email.as_deref();
+        match db.upsert_contact(org_name, email) {
+            Ok(id) => Some(id),
+            Err(e) => {
+                eprintln!(
+                    "Failed to upsert contact for organizer '{}': {}",
+                    org_name, e
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     // Prepare type-specific data
     let type_specific_data = CalendarEventData {
         location: cal_event.location.clone(),
@@ -90,8 +107,11 @@ pub fn sync_single_event(db: &Database, cal_event: &CalendarEvent) -> Result<usi
         external_link,
         type_specific_data: Some(type_specific_json),
         project_id: None, // Will be set manually or by rules
-        created_at: 0,    // Will be set by upsert_event
-        updated_at: 0,    // Will be set by upsert_event
+        organizer_id,     // FK to contacts table
+        repository_path: None,
+        domain: None,
+        created_at: 0, // Will be set by upsert_event
+        updated_at: 0, // Will be set by upsert_event
     };
 
     let (_event_id, was_new) = db
@@ -142,8 +162,11 @@ pub fn sync_git_activity(
         external_link: None, // Could add GitHub/GitLab links in the future
         type_specific_data: Some(type_specific_json),
         project_id: None, // Will be set manually or by rules
-        created_at: 0,    // Will be set by upsert_event
-        updated_at: 0,    // Will be set by upsert_event
+        organizer_id: None,
+        repository_path: repo_info.repository_path.clone(), // Promoted field
+        domain: None,
+        created_at: 0, // Will be set by upsert_event
+        updated_at: 0, // Will be set by upsert_event
     };
 
     let (_event_id, was_new) = db
@@ -198,7 +221,7 @@ pub fn sync_browser_visit(
         domain: domain.clone(),
         page_title: visit.title.clone(),
         visit_count: visit.visit_count,
-        repository_path,
+        repository_path: repository_path.clone(),
     };
 
     let type_specific_json = serde_json::to_string(&type_specific_data)
@@ -224,6 +247,9 @@ pub fn sync_browser_visit(
         external_link: Some(visit.url.clone()),
         type_specific_data: Some(type_specific_json),
         project_id: None,
+        organizer_id: None,
+        repository_path: repository_path.clone(), // Promoted field
+        domain: Some(domain.clone()),             // Promoted field
         created_at: 0,
         updated_at: 0,
     };

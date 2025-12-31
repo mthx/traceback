@@ -21,6 +21,10 @@ pub struct Event {
     pub external_link: Option<String>,
     pub type_specific_data: Option<String>,
     pub project_id: Option<i64>,
+    // Promoted fields for efficient querying
+    pub organizer_id: Option<i64>, // FK to contacts table (calendar events)
+    pub repository_path: Option<String>, // Canonical org/repo path (git/browser events)
+    pub domain: Option<String>,    // Domain (browser_history events)
     #[serde(
         serialize_with = "serialize_timestamp",
         deserialize_with = "deserialize_timestamp"
@@ -76,6 +80,23 @@ pub struct GitEventData {
     pub commit_hash: Option<String>,
     pub repository_path: Option<String>, // Canonical org/repo path (e.g., "facebook/react")
     pub origin_url: Option<String>,      // Full remote origin URL
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Contact {
+    pub id: Option<i64>,
+    pub name: String,
+    pub email: Option<String>,
+    #[serde(
+        serialize_with = "serialize_timestamp",
+        deserialize_with = "deserialize_timestamp"
+    )]
+    pub created_at: i64,
+    #[serde(
+        serialize_with = "serialize_timestamp",
+        deserialize_with = "deserialize_timestamp"
+    )]
+    pub updated_at: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -163,14 +184,6 @@ where
     }
 }
 
-/// Escapes special characters in LIKE patterns to prevent wildcard abuse and SQL injection
-fn escape_like_pattern(s: &str) -> String {
-    s.replace('\\', "\\\\") // Escape backslash first
-        .replace('%', "\\%") // Escape percent wildcard
-        .replace('_', "\\_") // Escape underscore wildcard
-        .replace('\'', "''") // Escape single quote for SQL
-}
-
 pub struct Database {
     conn: Connection,
 }
@@ -184,6 +197,15 @@ impl Database {
     pub fn init_schema(&self) -> Result<()> {
         self.conn.execute_batch(
             "
+            CREATE TABLE IF NOT EXISTS contacts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                UNIQUE(name, email)
+            );
+
             CREATE TABLE IF NOT EXISTS projects (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
@@ -201,10 +223,14 @@ impl Database {
                 external_link TEXT,
                 type_specific_data TEXT,
                 project_id INTEGER,
+                organizer_id INTEGER,
+                repository_path TEXT,
+                domain TEXT,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL,
                 UNIQUE(event_type, external_id),
-                FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL
+                FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL,
+                FOREIGN KEY (organizer_id) REFERENCES contacts (id) ON DELETE SET NULL
             );
 
             CREATE TABLE IF NOT EXISTS sync_metadata (
@@ -244,6 +270,11 @@ impl Database {
             -- Performance indexes for browser events and common queries
             CREATE INDEX IF NOT EXISTS idx_events_type_date ON events(event_type, start_date DESC);
             CREATE INDEX IF NOT EXISTS idx_events_project_date ON events(project_id, start_date DESC) WHERE project_id IS NOT NULL;
+            -- Indexes for promoted fields
+            CREATE INDEX IF NOT EXISTS idx_events_organizer ON events(organizer_id) WHERE organizer_id IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS idx_events_repository_path ON events(repository_path) WHERE repository_path IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS idx_events_domain ON events(domain) WHERE domain IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email) WHERE email IS NOT NULL;
             ",
         )?;
 
@@ -367,8 +398,8 @@ impl Database {
             .unwrap_or(false);
 
         self.conn.execute(
-            "INSERT INTO events (event_type, title, start_date, end_date, external_id, external_link, type_specific_data, project_id, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            "INSERT INTO events (event_type, title, start_date, end_date, external_id, external_link, type_specific_data, project_id, organizer_id, repository_path, domain, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
              ON CONFLICT(event_type, external_id) DO UPDATE SET
                 title = excluded.title,
                 start_date = excluded.start_date,
@@ -376,6 +407,9 @@ impl Database {
                 external_link = excluded.external_link,
                 type_specific_data = excluded.type_specific_data,
                 project_id = excluded.project_id,
+                organizer_id = excluded.organizer_id,
+                repository_path = excluded.repository_path,
+                domain = excluded.domain,
                 updated_at = excluded.updated_at",
             rusqlite::params![
                 event.event_type,
@@ -386,6 +420,9 @@ impl Database {
                 event.external_link,
                 event.type_specific_data,
                 event.project_id,
+                event.organizer_id,
+                event.repository_path,
+                event.domain,
                 created_at,
                 now,
             ],
@@ -414,7 +451,7 @@ impl Database {
         // Get work domains once for the SQL filter
         let work_domains = self.get_work_domains()?;
 
-        let mut sql = "SELECT id, event_type, title, start_date, end_date, external_id, external_link, type_specific_data, project_id, created_at, updated_at FROM events".to_string();
+        let mut sql = "SELECT id, event_type, title, start_date, end_date, external_id, external_link, type_specific_data, project_id, organizer_id, repository_path, domain, created_at, updated_at FROM events".to_string();
 
         let mut conditions = Vec::new();
         let mut owned_conditions: Vec<String> = Vec::new(); // Store owned strings
@@ -430,21 +467,25 @@ impl Database {
             conditions.push(&end_date_condition);
         }
 
-        // Filter browser events by work domains in SQL
+        // Filter browser events by work domains using promoted domain field
         if !work_domains.is_empty() {
-            let domain_conditions: Vec<String> = work_domains
-                .iter()
-                .map(|d| {
-                    format!(
-                        "type_specific_data LIKE '%\"domain\":\"%{}%' ESCAPE '\\'",
-                        escape_like_pattern(&d.domain)
-                    )
+            // Build parameterized placeholders for domains
+            let placeholders: Vec<String> = (0..work_domains.len())
+                .map(|i| {
+                    let param_idx = if start_date.is_some() && end_date.is_some() {
+                        3 + i
+                    } else if start_date.is_some() || end_date.is_some() {
+                        2 + i
+                    } else {
+                        1 + i
+                    };
+                    format!("domain = ?{}", param_idx)
                 })
                 .collect();
 
             let browser_filter = format!(
                 "(event_type != 'browser_history' OR ({}))",
-                domain_conditions.join(" OR ")
+                placeholders.join(" OR ")
             );
             owned_conditions.push(browser_filter);
             conditions.push(owned_conditions.last().unwrap());
@@ -462,15 +503,21 @@ impl Database {
 
         let mut stmt = self.conn.prepare(&sql)?;
 
-        let mut params_vec: Vec<i64> = Vec::new();
+        // Build params: first date params, then domain params
+        let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
         if let Some(start) = start_date {
-            params_vec.push(start);
+            params_vec.push(Box::new(start));
         }
         if let Some(end) = end_date {
-            params_vec.push(end);
+            params_vec.push(Box::new(end));
+        }
+        // Add domain parameters
+        for domain in &work_domains {
+            params_vec.push(Box::new(domain.domain.clone()));
         }
 
-        let event_iter = stmt.query_map(rusqlite::params_from_iter(params_vec), |row| {
+        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| b.as_ref()).collect();
+        let event_iter = stmt.query_map(params_refs.as_slice(), |row| {
             Ok(Event {
                 id: Some(row.get(0)?),
                 event_type: row.get(1)?,
@@ -481,8 +528,11 @@ impl Database {
                 external_link: row.get(6)?,
                 type_specific_data: row.get(7)?,
                 project_id: row.get(8)?,
-                created_at: row.get(9)?,
-                updated_at: row.get(10)?,
+                organizer_id: row.get(9)?,
+                repository_path: row.get(10)?,
+                domain: row.get(11)?,
+                created_at: row.get(12)?,
+                updated_at: row.get(13)?,
             })
         })?;
 
@@ -631,7 +681,7 @@ impl Database {
         // Note: For project-specific queries, we can skip work domain filtering
         // since browser events assigned to projects are already considered "work"
         let mut query = String::from(
-            "SELECT id, event_type, title, start_date, end_date, external_id, external_link, type_specific_data, project_id, created_at, updated_at
+            "SELECT id, event_type, title, start_date, end_date, external_id, external_link, type_specific_data, project_id, organizer_id, repository_path, domain, created_at, updated_at
              FROM events
              WHERE project_id = ?"
         );
@@ -672,8 +722,11 @@ impl Database {
                     external_link: row.get(6)?,
                     type_specific_data: row.get(7)?,
                     project_id: row.get(8)?,
-                    created_at: row.get(9)?,
-                    updated_at: row.get(10)?,
+                    organizer_id: row.get(9)?,
+                    repository_path: row.get(10)?,
+                    domain: row.get(11)?,
+                    created_at: row.get(12)?,
+                    updated_at: row.get(13)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -900,12 +953,12 @@ impl Database {
         for rule in rules {
             let count = match rule.rule_type.as_str() {
                 "organizer" => {
-                    // Match calendar events by organizer
+                    // Match calendar events by organizer contact name
                     self.conn.execute(
                         "UPDATE events
                          SET project_id = ?1
                          WHERE event_type = 'calendar'
-                         AND json_extract(type_specific_data, '$.organizer') = ?2",
+                         AND organizer_id IN (SELECT id FROM contacts WHERE name = ?2)",
                         rusqlite::params![rule.project_id, rule.match_value],
                     )?
                 }
@@ -920,17 +973,17 @@ impl Database {
                     )?
                 }
                 "repository" => {
-                    // Match git events by repository name
+                    // Match git/browser events by repository path using promoted field
                     self.conn.execute(
                         "UPDATE events
                          SET project_id = ?1
-                         WHERE event_type = 'git'
-                         AND json_extract(type_specific_data, '$.repository_name') = ?2",
+                         WHERE (event_type = 'git' OR event_type = 'browser_history')
+                         AND repository_path = ?2",
                         rusqlite::params![rule.project_id, rule.match_value],
                     )?
                 }
                 "url_pattern" => {
-                    // Match browser events by URL pattern
+                    // Match browser events by URL pattern (still in JSON)
                     self.conn.execute(
                         "UPDATE events
                          SET project_id = ?1
@@ -940,12 +993,12 @@ impl Database {
                     )?
                 }
                 "domain" => {
-                    // Match browser events by domain
+                    // Match browser events by domain using promoted field
                     self.conn.execute(
                         "UPDATE events
                          SET project_id = ?1
                          WHERE event_type = 'browser_history'
-                         AND json_extract(type_specific_data, '$.domain') = ?2",
+                         AND domain = ?2",
                         rusqlite::params![rule.project_id, rule.match_value],
                     )?
                 }
@@ -955,5 +1008,39 @@ impl Database {
         }
 
         Ok(updated_count)
+    }
+
+    // Contact operations
+    /// Find or create a contact by name and optional email
+    /// Returns the contact ID
+    pub fn upsert_contact(&self, name: &str, email: Option<&str>) -> Result<i64> {
+        let now = chrono::Utc::now().timestamp();
+
+        // Try to find existing contact by name and email
+        let existing: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT id FROM contacts WHERE name = ?1 AND email IS ?2",
+                rusqlite::params![name, email],
+                |row| row.get(0),
+            )
+            .ok();
+
+        if let Some(id) = existing {
+            // Update the timestamp
+            self.conn.execute(
+                "UPDATE contacts SET updated_at = ?1 WHERE id = ?2",
+                rusqlite::params![now, id],
+            )?;
+            return Ok(id);
+        }
+
+        // Insert new contact
+        self.conn.execute(
+            "INSERT INTO contacts (name, email, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![name, email, now, now],
+        )?;
+
+        Ok(self.conn.last_insert_rowid())
     }
 }
