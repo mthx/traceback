@@ -82,23 +82,6 @@ pub struct GitEventData {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Contact {
-    pub id: Option<i64>,
-    pub name: String,
-    pub email: Option<String>,
-    #[serde(
-        serialize_with = "serialize_timestamp",
-        deserialize_with = "deserialize_timestamp"
-    )]
-    pub created_at: i64,
-    #[serde(
-        serialize_with = "serialize_timestamp",
-        deserialize_with = "deserialize_timestamp"
-    )]
-    pub updated_at: i64,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WorkDomain {
     pub id: Option<i64>,
     pub domain: String,
