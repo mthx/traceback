@@ -41,14 +41,14 @@ import { ColorPicker } from "../components/color-picker";
 import { invoke } from "@tauri-apps/api/core";
 import type { Project } from "../types/event";
 import { Calendar as CalendarPage } from "./calendar";
-import { Events } from "./events";
+import { Log } from "./log";
 import { Projects } from "./projects";
 import { Settings } from "./settings";
 import { useAutoSync } from "../hooks/useAutoSync";
 import type { DateRange } from "../components/date-range-filter";
 import { RuleDialogProvider } from "../contexts/rule-dialog-context";
 
-type Page = "calendar" | "events" | "projects" | "settings";
+type Page = "calendar" | "log" | "projects" | "settings";
 type ProjectTab = "calendar" | "events" | "rules";
 
 interface State {
@@ -236,7 +236,7 @@ export function App() {
                     onShowWeekendsChange={setShowWeekends}
                   />
                 )}
-                {page === "events" && <Events />}
+                {page === "log" && <Log />}
                 {page === "projects" && (
                   <Projects
                     projectId={selectedProjectId}
@@ -321,11 +321,11 @@ export function AppSidebar({
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => onChangePage("events")}
-                  isActive={page === "events"}
+                  onClick={() => onChangePage("log")}
+                  isActive={page === "log"}
                 >
                   <ListIcon />
-                  <span>Events</span>
+                  <span>Log</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
