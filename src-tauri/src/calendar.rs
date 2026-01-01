@@ -30,19 +30,15 @@ pub async fn get_calendar_events_range(
     use chrono::DateTime;
     use objc2_event_kit::{EKEntityType, EKEventStore};
 
-    // Request access first. This is now self-contained and Send-safe.
     let granted = unsafe { request_calendar_access().await? };
 
     if !granted {
         return Err("Calendar access denied".to_string());
     }
 
-    // Now that access is granted, create an event store for fetching.
-    // This is safe because we are not holding it across an await.
     unsafe {
         let event_store = EKEventStore::new();
 
-        // Parse date strings
         let start_dt = DateTime::parse_from_rfc3339(start_date)
             .map_err(|e| format!("Invalid start date: {}", e))?;
         let end_dt = DateTime::parse_from_rfc3339(end_date)
@@ -51,17 +47,14 @@ pub async fn get_calendar_events_range(
         let start_nsdate = create_nsdate(&start_dt.with_timezone(&chrono::Utc));
         let end_nsdate = create_nsdate(&end_dt.with_timezone(&chrono::Utc));
 
-        // Get all calendars for events
         let calendars = event_store.calendarsForEntityType(EKEntityType::Event);
 
-        // Create predicate for events in date range
         let predicate = event_store.predicateForEventsWithStartDate_endDate_calendars(
             &start_nsdate,
             &end_nsdate,
             Some(&calendars),
         );
 
-        // Fetch events
         let events = event_store.eventsMatchingPredicate(&predicate);
         let count = events.len();
 
@@ -70,16 +63,13 @@ pub async fn get_calendar_events_range(
         for i in 0..count {
             let event = &events[i];
 
-            // Get event identifier (unique ID from Mac Calendar)
             let event_id = event
                 .eventIdentifier()
                 .map(|s| s.to_string())
                 .unwrap_or_default();
 
-            // Get title
             let title = event.title().to_string();
 
-            // Get dates
             let start_date = event.startDate();
             let end_date_obj = event.endDate();
             let is_all_day = event.isAllDay();
@@ -87,13 +77,9 @@ pub async fn get_calendar_events_range(
             let start_str = nsdate_to_string(&start_date);
             let end_str = nsdate_to_string(&end_date_obj);
 
-            // Get location (optional)
             let location = event.location().map(|s| s.to_string());
-
-            // Get notes (optional)
             let notes = event.notes().map(|s| s.to_string());
 
-            // Get attendees
             let mut attendees = Vec::new();
             if let Some(attendees_array) = event.attendees() {
                 for j in 0..attendees_array.len() {
@@ -104,10 +90,8 @@ pub async fn get_calendar_events_range(
                 }
             }
 
-            // Get organizer name and email
             let (organizer, organizer_email) = if let Some(org) = event.organizer() {
                 let name = org.name().map(|n| n.to_string());
-                // Try to get email from URL (format: mailto:email@example.com)
                 let email = org
                     .URL()
                     .absoluteString()
@@ -153,23 +137,15 @@ async unsafe fn request_calendar_access() -> Result<bool, String> {
     match status {
         EKAuthorizationStatus::FullAccess => return Ok(true),
         EKAuthorizationStatus::Denied | EKAuthorizationStatus::Restricted => return Ok(false),
-        EKAuthorizationStatus::NotDetermined => {
-            // This is the only case where we need to request access.
-        }
-        _ => {
-            // Handle other potential future statuses gracefully.
-            return Ok(false);
-        }
+        EKAuthorizationStatus::NotDetermined => {}
+        _ => return Ok(false),
     }
 
     let (tx, rx) = oneshot::channel();
     let tx_once = Mutex::new(Some(tx));
 
-    let completion_block = RcBlock::new(move |granted: Bool, error: *mut NSError| {
+    let completion_block = RcBlock::new(move |granted: Bool, _error: *mut NSError| {
         if let Some(tx) = tx_once.lock().unwrap().take() {
-            if !error.is_null() {
-                // You might want to log the error details here
-            }
             let _ = tx.send(granted.as_bool());
         }
     });

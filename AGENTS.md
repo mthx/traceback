@@ -15,6 +15,14 @@ It's still at an early stage, so we're still open to changing APIs without regar
 - **Database**: SQLite
 - **Platform**: macOS only (EventKit framework)
 
+## Style
+
+Keep tauri commands simple, delegating real work to other modules.
+
+Don't include comments that are easy to infer from the code for someone familiar with the domain and tech stack.
+
+React component style should align with the shadcn components that are included in this project.
+
 ## Development
 
 ```bash

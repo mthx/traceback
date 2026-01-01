@@ -21,7 +21,6 @@ pub struct Event {
     pub external_link: Option<String>,
     pub type_specific_data: Option<String>,
     pub project_id: Option<i64>,
-    // Promoted fields for efficient querying
     pub organizer_id: Option<i64>, // FK to contacts table (calendar events)
     pub repository_path: Option<String>, // Canonical org/repo path (git/browser events)
     pub domain: Option<String>,    // Domain (browser_history events)
