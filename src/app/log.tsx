@@ -136,45 +136,68 @@ export function Log() {
         return;
       if (dayGroups.length === 0) return;
 
-      e.preventDefault();
-
       const allEvents: AggregatedEvent[] = dayGroups.flatMap(
         (group) => group.events
       );
 
       if (allEvents.length === 0) return;
 
-      if (e.key === "Home") {
-        setSelectedEvent(allEvents[0]);
-        return;
-      } else if (e.key === "End") {
-        setSelectedEvent(allEvents[allEvents.length - 1]);
-        return;
-      }
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
 
-      if (!selectedEvent) return;
+        if (!selectedEvent) return;
 
-      const currentIndex = allEvents.findIndex((event) =>
-        eventsAreEqual(event, selectedEvent)
-      );
-
-      if (currentIndex === -1) return;
-
-      const pageSize = 10;
-
-      if (e.key === "ArrowDown" && currentIndex < allEvents.length - 1) {
-        setSelectedEvent(allEvents[currentIndex + 1]);
-      } else if (e.key === "ArrowUp" && currentIndex > 0) {
-        setSelectedEvent(allEvents[currentIndex - 1]);
-      } else if (e.key === "PageDown") {
-        const newIndex = Math.min(
-          currentIndex + pageSize,
-          allEvents.length - 1
+        const currentIndex = allEvents.findIndex((event) =>
+          eventsAreEqual(event, selectedEvent)
         );
-        setSelectedEvent(allEvents[newIndex]);
-      } else if (e.key === "PageUp") {
-        const newIndex = Math.max(currentIndex - pageSize, 0);
-        setSelectedEvent(allEvents[newIndex]);
+
+        if (currentIndex === -1) return;
+
+        if (e.key === "ArrowDown" && currentIndex < allEvents.length - 1) {
+          setSelectedEvent(allEvents[currentIndex + 1]);
+        } else if (e.key === "ArrowUp" && currentIndex > 0) {
+          setSelectedEvent(allEvents[currentIndex - 1]);
+        }
+      } else {
+        const scrollContainer = scrollRef.current;
+        if (!scrollContainer) return;
+
+        const currentEventId = selectedEvent ? getEventId(selectedEvent) : null;
+        const currentElement = currentEventId
+          ? eventRefs.current.get(currentEventId)
+          : null;
+
+        if (!currentElement) return;
+
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const currentRect = currentElement.getBoundingClientRect();
+        const relativeY = currentRect.top - containerRect.top;
+
+        requestAnimationFrame(() => {
+          const targetY = containerRect.top + relativeY;
+
+          let closestEvent: AggregatedEvent | null = null;
+          let closestDistance = Infinity;
+
+          for (const event of allEvents) {
+            const eventId = getEventId(event);
+            const element = eventRefs.current.get(eventId);
+            if (!element) continue;
+
+            const rect = element.getBoundingClientRect();
+            const eventCenterY = rect.top + rect.height / 2;
+            const distance = Math.abs(eventCenterY - targetY);
+
+            if (distance < closestDistance) {
+              closestDistance = distance;
+              closestEvent = event;
+            }
+          }
+
+          if (closestEvent) {
+            setSelectedEvent(closestEvent);
+          }
+        });
       }
     };
 
@@ -461,7 +484,7 @@ export function Log() {
                   }}
                 >
                   <div
-                    className={`sticky top-0 bg-background z-10 border-b border-border/30 px-4 py-2 ${groupIndex > 0 ? "border-t" : ""}`}
+                    className={`bg-background border-b border-border/30 px-4 py-2 ${groupIndex > 0 ? "border-t" : ""}`}
                   >
                     <h2 className="text-xs font-semibold text-muted-foreground tracking-wide">
                       {formatDateLong(group.date.toISOString())}
@@ -504,8 +527,10 @@ export function Log() {
                             }
                           }}
                           onClick={() => setSelectedEvent(event)}
-                          className={`w-full pl-8 pr-4 py-2.5 text-left hover:bg-muted/30 transition-colors ${
-                            isSelected ? "bg-muted/50" : ""
+                          className={`relative w-full pl-8 pr-4 py-2.5 text-left transition-colors ${
+                            isSelected
+                              ? "bg-accent/70 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-accent-foreground"
+                              : "hover:bg-muted/30"
                           }`}
                         >
                           <div className="flex items-start gap-3">
