@@ -515,7 +515,8 @@ impl Database {
             params_vec.push(Box::new(domain.domain.clone()));
         }
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| b.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|b| b.as_ref()).collect();
         let event_iter = stmt.query_map(params_refs.as_slice(), |row| {
             Ok(Event {
                 id: Some(row.get(0)?),

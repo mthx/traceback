@@ -92,13 +92,10 @@ pub async fn get_calendar_events_range(
 
             let (organizer, organizer_email) = if let Some(org) = event.organizer() {
                 let name = org.name().map(|n| n.to_string());
-                let email = org
-                    .URL()
-                    .absoluteString()
-                    .and_then(|url_string| {
-                        let url_str = url_string.to_string();
-                        url_str.strip_prefix("mailto:").map(|e| e.to_string())
-                    });
+                let email = org.URL().absoluteString().and_then(|url_string| {
+                    let url_str = url_string.to_string();
+                    url_str.strip_prefix("mailto:").map(|e| e.to_string())
+                });
                 (name, email)
             } else {
                 (None, None)

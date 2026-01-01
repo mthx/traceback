@@ -167,8 +167,10 @@ pub fn sync_browser_visit(
     let repository_path = extract_repository_path_from_url(&visit.url);
 
     let should_include = repository_path.as_ref().is_some_and(|path| {
-        discovered_repos.iter().any(|r| r == path) ||
-        github_orgs.iter().any(|org| path.starts_with(&format!("{}/", org)))
+        discovered_repos.iter().any(|r| r == path)
+            || github_orgs
+                .iter()
+                .any(|org| path.starts_with(&format!("{}/", org)))
     });
 
     if !should_include && repository_path.is_some() {

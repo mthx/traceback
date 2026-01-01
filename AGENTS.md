@@ -28,7 +28,7 @@ React component style should align with the shadcn components that are included 
 ```bash
 npm run tauri dev          # Dev server (Rust + Vite on port 1420).
 npm run tauri build        # Production build
-npm run format             # Format all code
+npm run format             # Format all code. Run this after changes.
 ```
 
 If the dev server is already running or you get a port conflict then it's likely because the user is alread running it.
