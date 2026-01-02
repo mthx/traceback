@@ -4,11 +4,15 @@ import {
   List as ListIcon,
   Plus,
   ChevronRight,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -44,7 +48,7 @@ import { Calendar as CalendarPage } from "./calendar";
 import { Log } from "./log";
 import { Projects } from "./projects";
 import { Settings } from "./settings";
-import { useAutoSync } from "../hooks/useAutoSync";
+import { useAutoSync, useSyncComplete } from "../hooks/sync-hooks";
 import type { DateRange } from "../components/date-range-filter";
 import { RuleDialogProvider } from "../contexts/rule-dialog-context";
 
@@ -71,9 +75,9 @@ export function App() {
   });
   const [showWeekends, setShowWeekends] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
   const { page, selectedProjectId, projectTab } = state;
-  const { permissionStatus, isChecking, syncCounter } = useAutoSync();
+  const { permissionStatus, isChecking, syncState, triggerSync } =
+    useAutoSync();
 
   // Load showWeekends setting from database on mount
   useEffect(() => {
@@ -111,10 +115,13 @@ export function App() {
     saveSettings();
   }, [showWeekends, settingsLoaded]);
 
-  // Fetch projects on mount and whenever sync completes
+  // Fetch projects on mount
   useEffect(() => {
     fetchProjects();
-  }, [syncCounter]);
+  }, []);
+
+  // Refetch projects when sync completes
+  useSyncComplete(fetchProjects);
 
   async function fetchProjects() {
     try {
@@ -139,14 +146,7 @@ export function App() {
   }
 
   async function handleFirstSync() {
-    setSyncError(null);
-    try {
-      await invoke<number>("sync_all_sources");
-      // syncCounter will increment automatically via useAutoSync
-    } catch (err) {
-      setSyncError(err as string);
-      console.error("Error triggering sync:", err);
-    }
+    await triggerSync();
   }
 
   const hasPermission = permissionStatus === "FullAccess";
@@ -181,22 +181,24 @@ export function App() {
                     </p>
                     <Button
                       onClick={handleFirstSync}
-                      disabled={isChecking}
+                      disabled={isChecking || syncState.inProgress}
                       className="w-full"
                     >
-                      Import Calendar Events
+                      {syncState.inProgress
+                        ? "Importing..."
+                        : "Import Calendar Events"}
                     </Button>
                     <p className="text-xs text-muted-foreground">
                       You'll be prompted to grant calendar access. Once granted,
                       events will sync automatically.
                     </p>
-                    {syncError && (
+                    {syncState.errors.length > 0 && (
                       <div className="border border-destructive rounded-md p-3 mt-4">
                         <p className="text-sm text-destructive font-medium">
                           Error
                         </p>
                         <p className="text-sm text-muted-foreground mt-1">
-                          {syncError}
+                          {syncState.errors[0].error}
                         </p>
                         <p className="text-sm text-muted-foreground mt-2">
                           Make sure to grant calendar permissions when prompted.
@@ -213,6 +215,7 @@ export function App() {
                 page={page}
                 selectedProjectId={selectedProjectId}
                 projects={projects}
+                syncState={syncState}
                 onChangePage={(page) =>
                   setState({
                     ...state,
@@ -265,6 +268,7 @@ type AppSidebarProps = {
   page: Page;
   selectedProjectId: number | null;
   projects: Project[];
+  syncState: import("../types/sync").SyncState;
   onChangePage: (page: Page) => void;
   onSelectProject: (projectId: number) => void;
   onProjectCreated: () => void;
@@ -274,6 +278,7 @@ export function AppSidebar({
   page,
   selectedProjectId,
   projects,
+  syncState,
   onChangePage,
   onSelectProject,
   onProjectCreated,
@@ -424,6 +429,31 @@ export function AppSidebar({
           )}
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
+          {syncState.inProgress ? (
+            <>
+              <RefreshCw className="h-3 w-3 animate-spin" />
+              <span>Syncing...</span>
+            </>
+          ) : syncState.errors.length > 0 ? (
+            <>
+              <AlertCircle className="h-3 w-3 text-destructive" />
+              <span className="text-destructive">Sync failed</span>
+            </>
+          ) : syncState.lastSyncTime ? (
+            <>
+              <CheckCircle2 className="h-3 w-3 text-green-600" />
+              <span>
+                {new Date(syncState.lastSyncTime).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            </>
+          ) : null}
+        </div>
+      </SidebarFooter>
     </Sidebar>
   );
 }

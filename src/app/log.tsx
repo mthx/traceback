@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
+import { useSyncComplete } from "@/hooks/sync-hooks";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -103,6 +104,8 @@ export function Log() {
   useEffect(() => {
     fetchInitialData();
   }, []);
+
+  useSyncComplete(fetchInitialData);
 
   useEffect(() => {
     if (dayGroups.length > 0 && !selectedEvent) {
@@ -437,8 +440,7 @@ export function Log() {
     <div className="flex h-full">
       <div className="flex-1 flex flex-col border-r min-w-0">
         <div className="px-4 py-4 border-b">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-semibold">Log</h1>
+          <div className="flex items-center justify-end">
             <div className="flex items-center gap-2">
               <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                 <PopoverTrigger asChild>

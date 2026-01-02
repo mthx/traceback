@@ -21,7 +21,15 @@ Keep tauri commands simple, delegating real work to other modules.
 
 Don't include comments that are easy to infer from the code for someone familiar with the domain and tech stack.
 
+For example, leave out this kind of comment which is redundant and can get out of sync:
+
+```typescript
+const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+```
+
 React component style should align with the shadcn components that are included in this project.
+
+Use hyphenated file names for Typescript, including for hooks and components.
 
 ## Development
 

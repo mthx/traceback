@@ -41,7 +41,7 @@ fn clean_notes(notes: Option<String>) -> Option<String> {
     })
 }
 
-pub fn sync_single_event(db: &Database, cal_event: &CalendarEvent) -> Result<usize, String> {
+pub fn sync_single_event(db: &Database, cal_event: &CalendarEvent) -> Result<(bool, i64), String> {
     let external_id = cal_event.event_id.clone();
 
     let organizer_id = if let Some(org_name) = &cal_event.organizer {
@@ -100,18 +100,18 @@ pub fn sync_single_event(db: &Database, cal_event: &CalendarEvent) -> Result<usi
         updated_at: 0,
     };
 
-    let (_event_id, was_new) = db
+    let (event_id, was_new) = db
         .upsert_event(&event)
         .map_err(|e| format!("Failed to insert event: {}", e))?;
 
-    Ok(if was_new { 1 } else { 0 })
+    Ok((was_new, event_id))
 }
 
 pub fn sync_git_activity(
     db: &Database,
     git_activity: &GitActivity,
     repo_info: &crate::git::GitRepository,
-) -> Result<usize, String> {
+) -> Result<(bool, i64), String> {
     let external_id = format!("{}:{}", git_activity.repository_id, git_activity.timestamp);
 
     let type_specific_data = GitEventData {
@@ -150,11 +150,11 @@ pub fn sync_git_activity(
         updated_at: 0,
     };
 
-    let (_event_id, was_new) = db
+    let (event_id, was_new) = db
         .upsert_event(&event)
         .map_err(|e| format!("Failed to insert git event: {}", e))?;
 
-    Ok(if was_new { 1 } else { 0 })
+    Ok((was_new, event_id))
 }
 
 pub fn sync_browser_visit(
@@ -162,7 +162,7 @@ pub fn sync_browser_visit(
     visit: &BrowserVisit,
     discovered_repos: &[String],
     github_orgs: &[String],
-) -> Result<usize, String> {
+) -> Result<(bool, i64), String> {
     let domain = extract_domain(&visit.url);
     let repository_path = extract_repository_path_from_url(&visit.url);
 
@@ -174,7 +174,7 @@ pub fn sync_browser_visit(
     });
 
     if !should_include && repository_path.is_some() {
-        return Ok(0);
+        return Ok((false, 0));
     }
 
     use std::collections::hash_map::DefaultHasher;
@@ -219,11 +219,11 @@ pub fn sync_browser_visit(
         updated_at: 0,
     };
 
-    let (_event_id, was_new) = db
+    let (event_id, was_new) = db
         .upsert_event(&event)
         .map_err(|e| format!("Failed to insert browser event: {}", e))?;
 
-    Ok(if was_new { 1 } else { 0 })
+    Ok((was_new, event_id))
 }
 
 fn extract_domain(url: &str) -> String {

@@ -3,6 +3,7 @@ mod calendar;
 mod db;
 mod git;
 mod sync;
+mod sync_events;
 
 use browser::auto_detect_zen_profile;
 use calendar::{check_calendar_permission, get_calendar_events_range, CalendarPermissionStatus};
@@ -115,138 +116,221 @@ fn get_sync_status(state: State<AppState>) -> Result<SyncStatus, String> {
 
 /// Central sync coordinator - syncs all event sources (calendar, git, browser)
 #[tauri::command]
-fn sync_all_sources(state: State<AppState>) -> Result<usize, String> {
-    tauri::async_runtime::block_on(async {
-        // Phase 1: Determine sync window
-        let (sync_since_timestamp, sync_since_rfc3339, is_first_sync) = state.with_db(|db| {
-            db.update_sync_status(None, true)?;
-            let sync_status = db.get_sync_status()?;
+fn sync_all_sources(state: State<AppState>, app: tauri::AppHandle) -> Result<(), String> {
+    use sync_events::*;
 
-            match sync_status.last_sync_time {
-                Some(last_sync_timestamp) => {
-                    let since_dt = chrono::DateTime::from_timestamp(last_sync_timestamp, 0)
-                        .ok_or_else(|| rusqlite::Error::InvalidQuery)?;
-                    Ok((last_sync_timestamp, since_dt.to_rfc3339(), false))
-                }
-                None => {
-                    // First sync - sync past DEFAULT_SYNC_DAYS_BACK days
-                    let since_dt = Utc::now() - chrono::Duration::days(DEFAULT_SYNC_DAYS_BACK);
-                    Ok((since_dt.timestamp(), since_dt.to_rfc3339(), true))
-                }
-            }
-        })?;
+    let app_clone = app.clone();
+    let state_clone = state.inner().clone();
 
-        if is_first_sync {
-            eprintln!(
-                "[Sync] Starting first sync ({} days)",
-                DEFAULT_SYNC_DAYS_BACK
+    // Sync on background thread (calendar sync happens synchronously in the thread)
+    std::thread::spawn(move || {
+        tauri::async_runtime::block_on(async move {
+            let start_time = std::time::Instant::now();
+            emit_sync_started(&app_clone);
+
+            // Phase 1: Determine sync window
+            let (sync_since_timestamp, sync_since_rfc3339, is_first_sync) = match state_clone
+                .with_db(|db| {
+                    db.update_sync_status(None, true)?;
+                    let sync_status = db.get_sync_status()?;
+
+                    match sync_status.last_sync_time {
+                        Some(last_sync_timestamp) => {
+                            let since_dt = chrono::DateTime::from_timestamp(last_sync_timestamp, 0)
+                                .ok_or_else(|| rusqlite::Error::InvalidQuery)?;
+                            Ok((last_sync_timestamp, since_dt.to_rfc3339(), false))
+                        }
+                        None => {
+                            let since_dt =
+                                Utc::now() - chrono::Duration::days(DEFAULT_SYNC_DAYS_BACK);
+                            Ok((since_dt.timestamp(), since_dt.to_rfc3339(), true))
+                        }
+                    }
+                }) {
+                Ok(result) => result,
+                Err(e) => {
+                    emit_sync_failed(&app_clone, None, e);
+                    return;
+                }
+            };
+
+            let now = Utc::now();
+            let now_timestamp = now.timestamp();
+            let mut total_new = 0;
+            let mut total_updated = 0;
+
+            // Phase 2: Sync calendar
+            emit_sync_progress(
+                &app_clone,
+                SyncSource::Calendar,
+                ProgressStatus::Starting,
+                format!("Fetching calendar events since {}", sync_since_rfc3339),
             );
-        } else {
-            eprintln!("[Sync] Starting delta sync");
-        }
 
-        let now = Utc::now();
-        let now_timestamp = now.timestamp();
-
-        // Phase 2: Sync calendar (async)
-        let calendar_count =
-            sync_calendar_source(&state, &sync_since_rfc3339, &now.to_rfc3339()).await?;
-
-        // Phase 3: Sync git and browser in background (don't block response)
-        let app_state = state.inner().clone();
-        std::thread::spawn(move || {
-            let git_count = sync_git_source(&app_state, sync_since_timestamp, is_first_sync);
-            let browser_count =
-                sync_browser_source(&app_state, sync_since_timestamp, is_first_sync);
-
-            match git_count {
-                Ok(count) => eprintln!("[Git] Synced {} new events", count),
-                Err(e) => eprintln!("[Git] Sync failed: {}", e),
+            match sync_calendar_source(
+                &state_clone,
+                &app_clone,
+                &sync_since_rfc3339,
+                &now.to_rfc3339(),
+            )
+            .await
+            {
+                Ok((new, updated)) => {
+                    total_new += new;
+                    total_updated += updated;
+                    emit_source_completed(&app_clone, SyncSource::Calendar, new, updated);
+                }
+                Err(e) => {
+                    emit_sync_failed(&app_clone, Some(SyncSource::Calendar), e);
+                }
             }
 
-            match browser_count {
-                Ok(count) => eprintln!("[Browser] Synced {} new events", count),
-                Err(e) => eprintln!("[Browser] Sync failed: {}", e),
+            // Phase 3: Sync git
+            emit_sync_progress(
+                &app_clone,
+                SyncSource::Git,
+                ProgressStatus::Starting,
+                "Discovering git repositories".to_string(),
+            );
+
+            match sync_git_source(
+                &state_clone,
+                &app_clone,
+                sync_since_timestamp,
+                is_first_sync,
+            ) {
+                Ok((new, updated)) => {
+                    total_new += new;
+                    total_updated += updated;
+                    emit_source_completed(&app_clone, SyncSource::Git, new, updated);
+                }
+                Err(e) => {
+                    emit_sync_failed(&app_clone, Some(SyncSource::Git), e);
+                }
             }
-        });
 
-        // Phase 4: Update sync status
-        state.with_db(|db| db.update_sync_status(Some(now_timestamp), false))?;
+            // Phase 4: Sync browser
+            emit_sync_progress(
+                &app_clone,
+                SyncSource::Browser,
+                ProgressStatus::Starting,
+                "Fetching browser history".to_string(),
+            );
 
-        Ok(calendar_count)
-    })
+            match sync_browser_source(
+                &state_clone,
+                &app_clone,
+                sync_since_timestamp,
+                is_first_sync,
+            ) {
+                Ok((new, updated)) => {
+                    total_new += new;
+                    total_updated += updated;
+                    emit_source_completed(&app_clone, SyncSource::Browser, new, updated);
+                }
+                Err(e) => {
+                    emit_sync_failed(&app_clone, Some(SyncSource::Browser), e);
+                }
+            }
+
+            // Phase 5: Update sync status
+            if let Err(e) =
+                state_clone.with_db(|db| db.update_sync_status(Some(now_timestamp), false))
+            {
+                emit_sync_failed(&app_clone, None, e);
+                return;
+            }
+
+            let duration = start_time.elapsed();
+            emit_sync_completed(&app_clone, total_new, total_updated, duration.as_millis());
+        })
+    });
+
+    Ok(())
 }
 
 /// Sync calendar events for a given time range
 async fn sync_calendar_source(
-    state: &State<'_, AppState>,
+    state: &AppState,
+    app: &tauri::AppHandle,
     start_date_rfc3339: &str,
     end_date_rfc3339: &str,
-) -> Result<usize, String> {
+) -> Result<(usize, usize), String> {
+    use sync_events::*;
+
     let calendar_events = get_calendar_events_range(start_date_rfc3339, end_date_rfc3339).await?;
-    eprintln!(
-        "[Calendar] Fetched {} events from EventKit",
-        calendar_events.len()
+    emit_sync_progress(
+        app,
+        SyncSource::Calendar,
+        ProgressStatus::InProgress,
+        format!("Processing {} calendar events", calendar_events.len()),
     );
 
     state.with_db(|db| {
         let mut new_count = 0;
+        let mut updated_count = 0;
         for cal_event in &calendar_events {
-            new_count += sync_single_event(db, cal_event).map_err(|e| {
+            let (is_new, _) = sync_single_event(db, cal_event).map_err(|e| {
                 rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
             })?;
+            if is_new {
+                new_count += 1;
+            } else {
+                updated_count += 1;
+            }
         }
-        eprintln!("[Calendar] Synced {} new events", new_count);
-        Ok(new_count)
+        Ok((new_count, updated_count))
     })
 }
 
 /// Sync git events since a given timestamp
 fn sync_git_source(
     app_state: &AppState,
+    app: &tauri::AppHandle,
     since_timestamp: i64,
-    is_first_sync: bool,
-) -> Result<usize, String> {
+    _is_first_sync: bool,
+) -> Result<(usize, usize), String> {
+    use sync_events::*;
     // Get dev folder from settings
     let dev_folder = match app_state.with_db(|db| db.get_setting("git_dev_folder")) {
         Ok(Some(folder)) => folder,
         Ok(None) => {
-            if is_first_sync {
-                eprintln!("[Git] No dev folder configured, skipping");
-            }
-            return Ok(0);
+            return Ok((0, 0));
         }
         Err(_) => {
-            eprintln!("[Git] Error reading dev folder setting, skipping");
-            return Ok(0);
+            return Ok((0, 0));
         }
     };
 
     let path = PathBuf::from(&dev_folder);
     if !path.exists() || !path.is_dir() {
-        eprintln!("[Git] Folder doesn't exist: {}", dev_folder);
-        return Ok(0);
+        return Ok((0, 0));
     }
 
     let repositories = match discover_repositories(&path, 2) {
         Ok(repos) => repos,
-        Err(e) => {
-            eprintln!("[Git] Error discovering repositories: {}", e);
-            return Ok(0);
+        Err(_) => {
+            return Ok((0, 0));
         }
     };
 
     if repositories.is_empty() {
-        return Ok(0);
+        return Ok((0, 0));
     }
 
-    eprintln!("[Git] Found {} repositories", repositories.len());
+    emit_sync_progress(
+        app,
+        SyncSource::Git,
+        ProgressStatus::InProgress,
+        format!("Found {} repositories", repositories.len()),
+    );
 
     let since_rfc3339 = chrono::DateTime::from_timestamp(since_timestamp, 0)
         .ok_or_else(|| "Invalid sync timestamp".to_string())?
         .to_rfc3339();
 
     let mut total_new = 0;
+    let mut total_updated = 0;
 
     for repo in repositories {
         let activities = match get_repository_activities(&repo, Some(&since_rfc3339)) {
@@ -256,31 +340,34 @@ fn sync_git_source(
 
         app_state.with_db(|db| {
             for activity in &activities {
-                if let Ok(count) = sync_git_activity(db, activity, &repo) {
-                    total_new += count;
+                if let Ok((is_new, _)) = sync_git_activity(db, activity, &repo) {
+                    if is_new {
+                        total_new += 1;
+                    } else {
+                        total_updated += 1;
+                    }
                 }
             }
             Ok(())
         })?;
     }
 
-    Ok(total_new)
+    Ok((total_new, total_updated))
 }
 
 /// Sync browser history since a given timestamp
 fn sync_browser_source(
     app_state: &AppState,
+    app: &tauri::AppHandle,
     since_timestamp: i64,
-    is_first_sync: bool,
-) -> Result<usize, String> {
+    _is_first_sync: bool,
+) -> Result<(usize, usize), String> {
+    use sync_events::*;
     // Get profile path, discovered repos, and GitHub orgs
     let (profile_path, discovered_repos, github_orgs) = match app_state.with_db(|db| {
         let profile_path = match db.get_setting("zen_browser_profile_path")? {
             Some(path) => path,
             None => {
-                if is_first_sync {
-                    eprintln!("[Browser] No profile path configured, skipping");
-                }
                 return Err(rusqlite::Error::QueryReturnedNoRows);
             }
         };
@@ -291,24 +378,28 @@ fn sync_browser_source(
         Ok((profile_path, discovered_repos, github_orgs))
     }) {
         Ok(data) => data,
-        Err(_) => return Ok(0),
+        Err(_) => return Ok((0, 0)),
     };
 
     let now = Utc::now();
     let visits =
         match browser::get_browser_visits_range(&profile_path, since_timestamp, now.timestamp()) {
             Ok(visits) => {
-                eprintln!("[Browser] Fetched {} visits from database", visits.len());
+                emit_sync_progress(
+                    app,
+                    SyncSource::Browser,
+                    ProgressStatus::InProgress,
+                    format!("Processing {} browser visits", visits.len()),
+                );
                 visits
             }
             Err(e) => {
-                eprintln!("[Browser] Error fetching visits: {}", e);
-                return Ok(0);
+                return Err(e);
             }
         };
 
     let mut new_count = 0;
-    let mut error_count = 0;
+    let mut updated_count = 0;
 
     for visit in &visits {
         match app_state.with_db(|db| {
@@ -316,21 +407,18 @@ fn sync_browser_source(
                 rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
             })
         }) {
-            Ok(count) => new_count += count,
-            Err(e) => {
-                error_count += 1;
-                if error_count <= 3 {
-                    eprintln!("[Browser] Error syncing visit: {}", e);
+            Ok((is_new, _)) => {
+                if is_new {
+                    new_count += 1;
+                } else {
+                    updated_count += 1;
                 }
             }
+            Err(_) => {}
         }
     }
 
-    if error_count > 3 {
-        eprintln!("[Browser] ... and {} more errors", error_count - 3);
-    }
-
-    Ok(new_count)
+    Ok((new_count, updated_count))
 }
 
 #[tauri::command]

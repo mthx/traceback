@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
+import { useSyncComplete } from "@/hooks/sync-hooks";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -107,6 +108,8 @@ export function Calendar({
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useSyncComplete(fetchData);
 
   // Create a map of project_id to project for quick lookup
   // Memoize to prevent re-creating on every render

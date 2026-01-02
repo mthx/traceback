@@ -202,8 +202,6 @@ export function Settings() {
 
   return (
     <div className="px-4 py-4 pb-6 max-w-2xl">
-      <h1 className="text-2xl font-semibold mb-6">Settings</h1>
-
       {error && (
         <div className="mb-4 p-3 bg-destructive/10 border border-destructive text-destructive rounded-md text-sm">
           {error}
