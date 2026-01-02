@@ -23,6 +23,40 @@ import {
   type CalendarViewType,
 } from "../components/calendar-view";
 import { useEventDialog } from "../contexts/rule-dialog-context";
+import {
+  startOfDay,
+  endOfDay,
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+} from "date-fns";
+
+function getVisibleDateRange(
+  date: Date,
+  viewType: CalendarViewType
+): { start: Date; end: Date } {
+  if (viewType === "day") {
+    return {
+      start: startOfDay(date),
+      end: endOfDay(date),
+    };
+  } else if (viewType === "week") {
+    return {
+      start: startOfWeek(date, { weekStartsOn: 1 }), // Monday
+      end: endOfWeek(date, { weekStartsOn: 1 }),
+    };
+  } else {
+    // month view - include padding days to complete calendar grid
+    const monthStart = startOfMonth(date);
+    const monthEnd = endOfMonth(date);
+
+    return {
+      start: startOfWeek(monthStart, { weekStartsOn: 1 }),
+      end: endOfWeek(monthEnd, { weekStartsOn: 1 }),
+    };
+  }
+}
 
 interface CalendarProps {
   showWeekends: boolean;
@@ -47,10 +81,15 @@ export function Calendar({
     setError(null);
 
     try {
+      const { start, end } = getVisibleDateRange(
+        calendarDate,
+        calendarViewType
+      );
+
       const [eventsData, projectsData] = await Promise.all([
         invoke<StoredEvent[]>("get_stored_events", {
-          startDate: null,
-          endDate: null,
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
         }),
         invoke<Project[]>("get_all_projects"),
       ]);
@@ -63,7 +102,7 @@ export function Calendar({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [calendarDate, calendarViewType]);
 
   useEffect(() => {
     fetchData();
