@@ -891,72 +891,72 @@ function WeekView({
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* Sticky header with day names and all-day events */}
-      <div className="sticky top-0 bg-background z-10 border-b border-neutral-200 dark:border-neutral-800">
-        {/* Day names row */}
-        <div
-          className="grid"
-          style={{
-            gridTemplateColumns: `64px repeat(${weekDays.length}, 1fr)`,
-          }}
-        >
-          <div className="p-2 text-xs font-medium"></div>
-          {weekDays.map((day) => (
-            <div
-              key={day.toISOString()}
-              className="p-2 border-l border-neutral-200 dark:border-neutral-800 first:border-l-0"
-            >
-              <div className="flex text-gray-500 items-baseline justify-end gap-1.5">
-                <div
-                  className={`text-base ${
-                    isToday(day) ? todayIndicatorClass : ""
-                  }`}
-                >
-                  {day.getDate()}
-                </div>
-                <div>{formatWeekday(day, true)}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* All-day events row */}
-        <div
-          className="grid"
-          style={{
-            gridTemplateColumns: `64px repeat(${weekDays.length}, 1fr)`,
-          }}
-        >
-          <div className="p-2 text-xs font-medium text-muted-foreground">
-            All day
-          </div>
-          <TooltipProvider>
-            {weekDays.map((day) => {
-              const { allDayEvents } = getEventsForDay(events, day, githubOrgs);
-              return (
-                <div
-                  key={`allday-${day.toISOString()}`}
-                  className="border-l border-neutral-200 dark:border-neutral-800 first:border-l-0 overflow-hidden min-w-0"
-                >
-                  <AllDayEventsRow
-                    events={allDayEvents}
-                    projectMap={projectMap}
-                    onEventClick={(event) => {
-                      if (onEventAssign) {
-                        onEventAssign(event);
-                      }
-                    }}
-                  />
-                </div>
-              );
-            })}
-          </TooltipProvider>
-        </div>
-      </div>
-
       <div ref={scrollRef} className="flex-1 overflow-auto select-none">
+        {/* Sticky header with day names and all-day events */}
+        <div className="sticky top-0 bg-background z-10 border-b border-neutral-200 dark:border-neutral-800">
+          {/* Day names row */}
+          <div
+            className="grid divide-x divide-neutral-200 dark:divide-neutral-800"
+            style={{
+              gridTemplateColumns: `64px repeat(${weekDays.length}, 1fr)`,
+            }}
+          >
+            <div className="p-2 text-xs font-medium"></div>
+            {weekDays.map((day) => (
+              <div key={day.toISOString()} className="p-2">
+                <div className="flex text-gray-500 items-baseline justify-end gap-1.5">
+                  <div
+                    className={`text-base ${
+                      isToday(day) ? todayIndicatorClass : ""
+                    }`}
+                  >
+                    {day.getDate()}
+                  </div>
+                  <div>{formatWeekday(day, true)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* All-day events row */}
+          <div
+            className="grid divide-x divide-neutral-200 dark:divide-neutral-800"
+            style={{
+              gridTemplateColumns: `64px repeat(${weekDays.length}, 1fr)`,
+            }}
+          >
+            <div className="p-2 text-xs font-medium text-muted-foreground">
+              All day
+            </div>
+            <TooltipProvider>
+              {weekDays.map((day) => {
+                const { allDayEvents } = getEventsForDay(
+                  events,
+                  day,
+                  githubOrgs
+                );
+                return (
+                  <div
+                    key={`allday-${day.toISOString()}`}
+                    className="overflow-hidden min-w-0"
+                  >
+                    <AllDayEventsRow
+                      events={allDayEvents}
+                      projectMap={projectMap}
+                      onEventClick={(event) => {
+                        if (onEventAssign) {
+                          onEventAssign(event);
+                        }
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </TooltipProvider>
+          </div>
+        </div>
         <div
-          className="grid"
+          className="grid divide-x divide-neutral-200 dark:divide-neutral-800"
           style={{
             gridTemplateColumns: `64px repeat(${weekDays.length}, 1fr)`,
           }}
@@ -965,7 +965,7 @@ function WeekView({
             {hours.map((hour) => (
               <div
                 key={hour}
-                className="h-15 border-b border-r border-neutral-200 dark:border-neutral-800 px-2 text-xs text-muted-foreground flex items-start"
+                className="h-15 border-b border-neutral-200 dark:border-neutral-800 px-2 text-xs text-muted-foreground flex items-start"
               >
                 {hour.toString().padStart(2, "0") + ":00"}{" "}
               </div>
@@ -987,10 +987,7 @@ function WeekView({
             );
 
             return (
-              <div
-                key={day.toISOString()}
-                className="relative border-r border-neutral-200 dark:border-neutral-800 last:border-r-0"
-              >
+              <div key={day.toISOString()} className="relative">
                 {hours.map((hour) => (
                   <div
                     key={hour}
