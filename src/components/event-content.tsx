@@ -153,7 +153,10 @@ export function EventHeader({ event }: EventHeaderProps) {
 
   return (
     <div className="flex items-start gap-2">
-      <Icon className="h-5 w-5 text-muted-foreground shrink-0" size={20} />
+      <Icon
+        className="h-5 w-5 mt-0.75 text-muted-foreground shrink-0"
+        size={20}
+      />
       <span className="font-semibold text-lg">{title}</span>
     </div>
   );
