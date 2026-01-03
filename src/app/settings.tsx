@@ -181,9 +181,9 @@ export function Settings() {
         await invoke("cancel_sync");
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
-      await invoke("reset_database");
+      await invoke("clear_event_data");
       setIsDeleteOpen(false);
-      console.log("All data cleared");
+      console.log("Event data cleared");
       window.location.reload();
     } catch (err) {
       setError(err as string);
@@ -348,11 +348,12 @@ export function Settings() {
         <div className="space-y-4 pt-4">
           <div>
             <h2 className="text-lg font-semibold text-destructive">
-              Clear All Data
+              Clear Event Data
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              This will permanently delete all your projects, events, rules, and
-              other data. This action is irreversible.
+              This will permanently delete all events, calendar entries, git
+              activity, and browser history. Your configuration (projects,
+              rules, and settings) will be preserved.
             </p>
           </div>
           <Button
@@ -361,7 +362,7 @@ export function Settings() {
             onClick={() => setIsDeleteOpen(true)}
           >
             <Trash2 className="mr-2 h-4 w-4" />
-            Clear all data
+            Clear event data
           </Button>
         </div>
       </div>
@@ -370,10 +371,11 @@ export function Settings() {
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Are you absolutely sure?</DialogTitle>
+            <DialogTitle>Clear all event data?</DialogTitle>
             <DialogDescription>
               This action cannot be undone. This will permanently delete all
-              your data.
+              events, calendar entries, git activity, and browser history. Your
+              projects, rules, and settings will be preserved.
               {syncState.inProgress && (
                 <span className="block mt-2 text-muted-foreground">
                   A sync is currently in progress and will be cancelled.
@@ -386,7 +388,7 @@ export function Settings() {
               Cancel
             </Button>
             <Button variant="destructive" onClick={handleClearAllData}>
-              Delete everything
+              Clear event data
             </Button>
           </DialogFooter>
         </DialogContent>

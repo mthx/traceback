@@ -83,6 +83,12 @@ fn get_all_projects(state: State<AppState>) -> Result<Vec<Project>, String> {
 }
 
 #[tauri::command]
+fn clear_event_data(state: State<AppState>) -> Result<String, String> {
+    state.with_db(|db| db.clear_event_data())?;
+    Ok("Event data cleared successfully".to_string())
+}
+
+#[tauri::command]
 fn reset_database(app: tauri::AppHandle) -> Result<String, String> {
     let app_data_dir = app
         .path()
@@ -676,6 +682,7 @@ pub fn run() {
             get_stored_events,
             get_event_project,
             get_all_projects,
+            clear_event_data,
             reset_database,
             get_sync_status,
             cancel_sync,

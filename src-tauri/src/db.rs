@@ -361,6 +361,17 @@ impl Database {
         Ok(())
     }
 
+    pub fn clear_event_data(&self) -> Result<()> {
+        self.conn.execute_batch(
+            "
+            DELETE FROM events;
+            DELETE FROM contacts;
+            DELETE FROM sync_metadata;
+            ",
+        )?;
+        Ok(())
+    }
+
     pub fn upsert_event(&self, event: &Event) -> Result<(i64, bool)> {
         let now = chrono::Utc::now().timestamp();
         let created_at = if event.created_at == 0 {
