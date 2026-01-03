@@ -42,6 +42,14 @@ npm run format             # Format all code. Run this after changes.
 If the dev server is already running or you get a port conflict then it's likely because the user is alread running it.
 Try tailing logs/dev-server.log to view the output.
 
+### Rust Changes
+
+After making Rust changes, run the same checks that CI does:
+
+```bash
+cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+```
+
 ## Database
 
 **Database location**: `~/Library/Application Support/net.hillsdon.matt.traceback/traceback.db`
