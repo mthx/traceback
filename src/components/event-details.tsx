@@ -184,7 +184,7 @@ function RepositoryAggregateEventDetails({
     <div className="space-y-4">
       {timeline.length > 0 && (
         <DetailsSection title={`Activities (${totalCount})`}>
-          <div className="space-y-2 max-h-48 overflow-y-auto">
+          <div className="space-y-2">
             {timeline.map((item, idx) => {
               if (item.type === "git") {
                 return (
