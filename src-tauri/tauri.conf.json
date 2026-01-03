@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Traceback",
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
