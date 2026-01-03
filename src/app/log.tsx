@@ -438,7 +438,7 @@ export function Log() {
 
   return (
     <div className="flex h-full">
-      <div className="flex-1 flex flex-col border-r min-w-0">
+      <div className="flex-3 flex flex-col border-r min-w-0">
         <div className="px-4 py-4 border-b">
           <div className="flex items-center justify-end">
             <div className="flex items-center gap-2">
@@ -578,7 +578,7 @@ export function Log() {
         </div>
       </div>
 
-      <div className="w-96 flex flex-col">
+      <div className="flex-2 flex flex-col min-w-80">
         {selectedEvent ? (
           <div className="flex-1 overflow-y-auto px-4 py-4">
             <div className="space-y-3">

@@ -1155,24 +1155,35 @@ function MonthView({
         }}
       >
         {monthDays.map((day) => {
-          const { calendarEvents, gitAggregates } = getEventsForDay(
-            events,
-            day,
-            githubOrgs
-          );
+          const {
+            calendarEvents,
+            gitAggregates,
+            browserAggregates,
+            repositoryAggregates,
+          } = getEventsForDay(events, day, githubOrgs);
 
-          // Combine calendar events and git aggregates for display
+          // Combine all event types for display
           type MonthDisplayItem =
             | { type: "calendar"; event: StoredEvent }
-            | { type: "git"; aggregate: AggregatedGitEvent };
+            | { type: "git"; aggregate: AggregatedGitEvent }
+            | { type: "browser"; aggregate: AggregatedBrowserEvent }
+            | { type: "repository"; aggregate: AggregatedRepositoryEvent };
 
           const allDisplayItems: MonthDisplayItem[] = [
             ...calendarEvents.map((event) => ({
               type: "calendar" as const,
               event,
             })),
+            ...repositoryAggregates.map((aggregate) => ({
+              type: "repository" as const,
+              aggregate,
+            })),
             ...gitAggregates.map((aggregate) => ({
               type: "git" as const,
+              aggregate,
+            })),
+            ...browserAggregates.map((aggregate) => ({
+              type: "browser" as const,
               aggregate,
             })),
           ];
@@ -1206,30 +1217,49 @@ function MonthView({
 
               <div className="flex-1 min-h-0">
                 <TooltipProvider>
-                  {visibleItems.map((item) => (
-                    <MonthEventBlock
-                      key={
-                        item.type === "git"
-                          ? `git-${item.aggregate.id}`
-                          : item.event.id
-                      }
-                      event={item.type === "calendar" ? item.event : undefined}
-                      gitAggregate={
-                        item.type === "git" ? item.aggregate : undefined
-                      }
-                      projectMap={projectMap}
-                      onClick={() => {
-                        if (onEventAssign) {
-                          if (item.type === "git") {
-                            onEventAssign(item.aggregate);
-                          } else {
-                            onEventAssign(item.event);
-                          }
+                  {visibleItems.map((item) => {
+                    let key: string;
+                    if (item.type === "calendar") {
+                      key = `calendar-${item.event.id}`;
+                    } else if (item.type === "git") {
+                      key = `git-${item.aggregate.id}`;
+                    } else if (item.type === "browser") {
+                      key = `browser-${item.aggregate.id}`;
+                    } else {
+                      key = `repository-${item.aggregate.id}`;
+                    }
+
+                    return (
+                      <MonthEventBlock
+                        key={key}
+                        event={
+                          item.type === "calendar" ? item.event : undefined
                         }
-                      }}
-                      onAssignmentComplete={onAssignmentComplete}
-                    />
-                  ))}
+                        gitAggregate={
+                          item.type === "git" ? item.aggregate : undefined
+                        }
+                        browserAggregate={
+                          item.type === "browser" ? item.aggregate : undefined
+                        }
+                        repositoryAggregate={
+                          item.type === "repository"
+                            ? item.aggregate
+                            : undefined
+                        }
+                        projectMap={projectMap}
+                        onClick={() => {
+                          if (onEventAssign) {
+                            if (item.type === "calendar") {
+                              onEventAssign(item.event);
+                            } else {
+                              onEventAssign(item.aggregate);
+                            }
+                          }
+                        }}
+                        onAssignmentComplete={onAssignmentComplete}
+                      />
+                    );
+                  })}
                 </TooltipProvider>
 
                 {remainingCount > 0 && (
