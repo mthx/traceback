@@ -22,6 +22,7 @@ pub enum SyncEvent {
         total_updated: usize,
         duration_ms: u128,
     },
+    Cancelled,
     Failed {
         source: Option<SyncSource>,
         error: String,
@@ -106,6 +107,10 @@ pub fn emit_sync_completed(
             duration_ms,
         },
     );
+}
+
+pub fn emit_sync_cancelled(app: &AppHandle) {
+    emit_sync_event(app, SyncEvent::Cancelled);
 }
 
 pub fn emit_sync_failed(app: &AppHandle, source: Option<SyncSource>, error: String) {

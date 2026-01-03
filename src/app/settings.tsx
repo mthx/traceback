@@ -13,8 +13,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Trash2, Plus, X } from "lucide-react";
+import { useSyncManager } from "@/hooks/sync-hooks";
 
 export function Settings() {
+  const { syncState } = useSyncManager();
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -175,6 +177,10 @@ export function Settings() {
 
   async function handleClearAllData() {
     try {
+      if (syncState.inProgress) {
+        await invoke("cancel_sync");
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
       await invoke("reset_database");
       setIsDeleteOpen(false);
       console.log("All data cleared");
@@ -368,6 +374,11 @@ export function Settings() {
             <DialogDescription>
               This action cannot be undone. This will permanently delete all
               your data.
+              {syncState.inProgress && (
+                <span className="block mt-2 text-muted-foreground">
+                  A sync is currently in progress and will be cancelled.
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -14,6 +14,7 @@ use std::path::PathBuf;
 
 // Default sync window for all event sources on initial sync
 const DEFAULT_SYNC_DAYS_BACK: i64 = 90;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use sync::{sync_git_activity, sync_single_event};
 use tauri::menu::{MenuBuilder, SubmenuBuilder};
@@ -22,6 +23,7 @@ use tauri::{Manager, State};
 #[derive(Clone)]
 struct AppState {
     db: Arc<Mutex<Database>>,
+    cancel_sync: Arc<AtomicBool>,
 }
 
 impl AppState {
@@ -114,6 +116,11 @@ fn get_sync_status(state: State<AppState>) -> Result<SyncStatus, String> {
     state.with_db(|db| db.get_sync_status())
 }
 
+#[tauri::command]
+fn cancel_sync(state: State<AppState>) {
+    state.cancel_sync.store(true, Ordering::Relaxed);
+}
+
 /// Central sync coordinator - syncs all event sources (calendar, git, browser)
 #[tauri::command]
 fn sync_all_sources(state: State<AppState>, app: tauri::AppHandle) -> Result<(), String> {
@@ -122,11 +129,24 @@ fn sync_all_sources(state: State<AppState>, app: tauri::AppHandle) -> Result<(),
     let app_clone = app.clone();
     let state_clone = state.inner().clone();
 
+    // Reset cancellation flag at start of sync
+    state.cancel_sync.store(false, Ordering::Relaxed);
+
     // Sync on background thread (calendar sync happens synchronously in the thread)
     std::thread::spawn(move || {
         tauri::async_runtime::block_on(async move {
             let start_time = std::time::Instant::now();
             emit_sync_started(&app_clone);
+
+            macro_rules! check_cancelled {
+                () => {
+                    if state_clone.cancel_sync.load(Ordering::Relaxed) {
+                        emit_sync_cancelled(&app_clone);
+                        let _ = state_clone.with_db(|db| db.update_sync_status(None, false));
+                        return;
+                    }
+                };
+            }
 
             // Phase 1: Determine sync window
             let (sync_since_timestamp, sync_since_rfc3339, is_first_sync) = match state_clone
@@ -159,6 +179,8 @@ fn sync_all_sources(state: State<AppState>, app: tauri::AppHandle) -> Result<(),
             let mut total_new = 0;
             let mut total_updated = 0;
 
+            check_cancelled!();
+
             // Phase 2: Sync calendar
             emit_sync_progress(
                 &app_clone,
@@ -181,9 +203,12 @@ fn sync_all_sources(state: State<AppState>, app: tauri::AppHandle) -> Result<(),
                     emit_source_completed(&app_clone, SyncSource::Calendar, new, updated);
                 }
                 Err(e) => {
+                    check_cancelled!();
                     emit_sync_failed(&app_clone, Some(SyncSource::Calendar), e);
                 }
             }
+
+            check_cancelled!();
 
             // Phase 3: Sync git
             emit_sync_progress(
@@ -205,9 +230,12 @@ fn sync_all_sources(state: State<AppState>, app: tauri::AppHandle) -> Result<(),
                     emit_source_completed(&app_clone, SyncSource::Git, new, updated);
                 }
                 Err(e) => {
+                    check_cancelled!();
                     emit_sync_failed(&app_clone, Some(SyncSource::Git), e);
                 }
             }
+
+            check_cancelled!();
 
             // Phase 4: Sync browser
             emit_sync_progress(
@@ -229,6 +257,7 @@ fn sync_all_sources(state: State<AppState>, app: tauri::AppHandle) -> Result<(),
                     emit_source_completed(&app_clone, SyncSource::Browser, new, updated);
                 }
                 Err(e) => {
+                    check_cancelled!();
                     emit_sync_failed(&app_clone, Some(SyncSource::Browser), e);
                 }
             }
@@ -270,6 +299,10 @@ async fn sync_calendar_source(
         let mut new_count = 0;
         let mut updated_count = 0;
         for cal_event in &calendar_events {
+            if state.cancel_sync.load(Ordering::Relaxed) {
+                return Err(rusqlite::Error::ExecuteReturnedResults);
+            }
+
             let (is_new, _) = sync_single_event(db, cal_event).map_err(|e| {
                 rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
             })?;
@@ -333,6 +366,10 @@ fn sync_git_source(
     let mut total_updated = 0;
 
     for repo in repositories {
+        if app_state.cancel_sync.load(Ordering::Relaxed) {
+            return Err("Sync cancelled".to_string());
+        }
+
         let activities = match get_repository_activities(&repo, Some(&since_rfc3339)) {
             Ok(acts) => acts,
             Err(_) => continue,
@@ -340,6 +377,10 @@ fn sync_git_source(
 
         app_state.with_db(|db| {
             for activity in &activities {
+                if app_state.cancel_sync.load(Ordering::Relaxed) {
+                    return Err(rusqlite::Error::ExecuteReturnedResults);
+                }
+
                 if let Ok((is_new, _)) = sync_git_activity(db, activity, &repo) {
                     if is_new {
                         total_new += 1;
@@ -402,19 +443,20 @@ fn sync_browser_source(
     let mut updated_count = 0;
 
     for visit in &visits {
-        match app_state.with_db(|db| {
+        if app_state.cancel_sync.load(Ordering::Relaxed) {
+            return Err("Sync cancelled".to_string());
+        }
+
+        if let Ok((is_new, _)) = app_state.with_db(|db| {
             sync::sync_browser_visit(db, visit, &discovered_repos, &github_orgs).map_err(|e| {
                 rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::other(e)))
             })
         }) {
-            Ok((is_new, _)) => {
-                if is_new {
-                    new_count += 1;
-                } else {
-                    updated_count += 1;
-                }
+            if is_new {
+                new_count += 1;
+            } else {
+                updated_count += 1;
             }
-            Err(_) => {}
         }
     }
 
@@ -587,6 +629,7 @@ pub fn run() {
 
             app.manage(AppState {
                 db: Arc::new(Mutex::new(db)),
+                cancel_sync: Arc::new(AtomicBool::new(false)),
             });
 
             // Note: We don't auto-sync on startup because calendar permission requests
@@ -635,6 +678,7 @@ pub fn run() {
             get_all_projects,
             reset_database,
             get_sync_status,
+            cancel_sync,
             sync_all_sources,
             create_project,
             update_project,

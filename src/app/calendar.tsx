@@ -70,17 +70,12 @@ export function Calendar({
 }: CalendarProps) {
   const [events, setEvents] = useState<StoredEvent[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [calendarViewType, setCalendarViewType] =
     useState<CalendarViewType>("week");
   const [calendarDate, setCalendarDate] = useState(new Date());
   const { openEventDialog } = useEventDialog();
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
     try {
       const { start, end } = getVisibleDateRange(
         calendarDate,
@@ -98,10 +93,7 @@ export function Calendar({
       setEvents(eventsData);
       setProjects(projectsData);
     } catch (err) {
-      setError(err as string);
       console.error("Error fetching calendar data:", err);
-    } finally {
-      setLoading(false);
     }
   }, [calendarDate, calendarViewType]);
 
@@ -127,34 +119,6 @@ export function Calendar({
   ) => {
     openEventDialog(event, fetchData);
   };
-
-  if (loading) {
-    return (
-      <div className="px-4 pb-6">
-        <h1 className="text-2xl font-semibold">Loading...</h1>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="px-4 pb-6">
-        <h1 className="text-2xl font-semibold text-destructive">Error</h1>
-        <p className="text-sm text-muted-foreground mt-2">{error}</p>
-      </div>
-    );
-  }
-
-  if (events.length === 0) {
-    return (
-      <div className="px-4 pb-6">
-        <h1 className="text-2xl font-semibold mb-4">Calendar</h1>
-        <p className="text-sm text-muted-foreground">
-          No events found. Sync your calendar to get started.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <CalendarViewProvider

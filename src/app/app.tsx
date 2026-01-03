@@ -216,6 +216,7 @@ export function App() {
                 selectedProjectId={selectedProjectId}
                 projects={projects}
                 syncState={syncState}
+                triggerSync={triggerSync}
                 onChangePage={(page) =>
                   setState({
                     ...state,
@@ -272,6 +273,7 @@ type AppSidebarProps = {
   onChangePage: (page: Page) => void;
   onSelectProject: (projectId: number) => void;
   onProjectCreated: () => void;
+  triggerSync: () => Promise<void>;
 };
 
 export function AppSidebar({
@@ -279,6 +281,7 @@ export function AppSidebar({
   selectedProjectId,
   projects,
   syncState,
+  triggerSync,
   onChangePage,
   onSelectProject,
   onProjectCreated,
@@ -430,19 +433,19 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
+        <div className="px-2 py-2">
           {syncState.inProgress ? (
-            <>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <RefreshCw className="h-3 w-3 animate-spin" />
               <span>Syncing...</span>
-            </>
+            </div>
           ) : syncState.errors.length > 0 ? (
-            <>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <AlertCircle className="h-3 w-3 text-destructive" />
               <span className="text-destructive">Sync failed</span>
-            </>
+            </div>
           ) : syncState.lastSyncTime ? (
-            <>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <CheckCircle2 className="h-3 w-3 text-green-600" />
               <span>
                 {new Date(syncState.lastSyncTime).toLocaleTimeString([], {
@@ -450,8 +453,19 @@ export function AppSidebar({
                   minute: "2-digit",
                 })}
               </span>
-            </>
-          ) : null}
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">No events yet</p>
+              <Button
+                size="sm"
+                onClick={triggerSync}
+                className="h-6 text-xs px-2"
+              >
+                Sync now
+              </Button>
+            </div>
+          )}
         </div>
       </SidebarFooter>
     </Sidebar>

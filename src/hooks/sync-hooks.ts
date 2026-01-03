@@ -17,6 +17,25 @@ export function useSyncManager() {
   const [syncState, setSyncState] = useState<SyncState>(initialSyncState);
 
   useEffect(() => {
+    async function loadInitialState() {
+      try {
+        const status = await invoke<{
+          last_sync_time: string | null;
+          sync_in_progress: boolean;
+        }>("get_sync_status");
+        setSyncState((prev) => ({
+          ...prev,
+          lastSyncTime: status.last_sync_time,
+          inProgress: status.sync_in_progress,
+        }));
+      } catch (error) {
+        console.error("Failed to load sync status:", error);
+      }
+    }
+    loadInitialState();
+  }, []);
+
+  useEffect(() => {
     const setupListener = async () => {
       const unlisten = await listen<SyncEvent>("sync-event", (event) => {
         const payload = event.payload;
@@ -55,6 +74,14 @@ export function useSyncManager() {
               ...prev,
               inProgress: false,
               lastSyncTime: new Date().toISOString(),
+              currentSource: null,
+            }));
+            break;
+
+          case "cancelled":
+            setSyncState((prev) => ({
+              ...prev,
+              inProgress: false,
               currentSource: null,
             }));
             break;
@@ -134,6 +161,7 @@ export function useAutoSync() {
   const [permissionStatus, setPermissionStatus] =
     useState<CalendarPermissionStatus>("NotDetermined");
   const [isChecking, setIsChecking] = useState(true);
+  const [syncStateLoaded, setSyncStateLoaded] = useState(false);
   const intervalRef = useRef<number | null>(null);
   const focusDebounceRef = useRef<number | null>(null);
   const lastSyncAttemptRef = useRef<number>(0);
@@ -143,10 +171,21 @@ export function useAutoSync() {
 
   useEffect(() => {
     syncStateRef.current = syncState;
-  }, [syncState]);
+    // Mark as loaded once we have initial sync state
+    if (!syncStateLoaded) {
+      setSyncStateLoaded(true);
+    }
+  }, [syncState, syncStateLoaded]);
 
   const performSync = useCallback(
     async (source: string) => {
+      if (!syncStateRef.current.lastSyncTime) {
+        console.log(
+          `Skipping ${source} sync - no previous sync, manual sync required`
+        );
+        return;
+      }
+
       const now = Date.now();
       const timeSinceLastAttempt = now - lastSyncAttemptRef.current;
 
@@ -184,6 +223,9 @@ export function useAutoSync() {
   }, []);
 
   useEffect(() => {
+    // Wait for sync state to be loaded before initializing
+    if (!syncStateLoaded) return;
+
     async function initialize() {
       const status = await checkPermission();
 
@@ -231,7 +273,7 @@ export function useAutoSync() {
     return () => {
       cleanup.then((fn) => fn?.());
     };
-  }, [checkPermission, performSync]);
+  }, [syncStateLoaded, checkPermission, performSync]);
 
   return {
     permissionStatus,

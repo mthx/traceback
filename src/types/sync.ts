@@ -28,6 +28,7 @@ export type SyncEvent =
       total_updated: number;
       duration_ms: number;
     }
+  | { type: "cancelled" }
   | {
       type: "failed";
       source?: SyncSource;
