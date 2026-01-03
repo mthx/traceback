@@ -797,9 +797,12 @@ function DayView({
           {hours.map((hour) => (
             <div
               key={hour}
-              className="h-15 border-b border-neutral-200 dark:border-neutral-800 flex items-start px-2 text-xs text-muted-foreground"
+              className="h-15 flex items-start px-2 text-xs text-muted-foreground first:pt-2"
             >
-              {hour.toString().padStart(2, "0") + ":00"}{" "}
+              <div className="w-12 -mt-2">
+                {hour.toString().padStart(2, "0") + ":00"}
+              </div>
+              <div className="flex-1 border-b border-neutral-200 dark:border-neutral-800"></div>
             </div>
           ))}
 
@@ -965,9 +968,11 @@ function WeekView({
             {hours.map((hour) => (
               <div
                 key={hour}
-                className="h-15 border-b border-neutral-200 dark:border-neutral-800 px-2 text-xs text-muted-foreground flex items-start"
+                className="first:pt-2 h-15 px-2 text-xs text-muted-foreground flex items-start"
               >
-                {hour.toString().padStart(2, "0") + ":00"}{" "}
+                <div className="-mt-2">
+                  {hour.toString().padStart(2, "0") + ":00"}{" "}
+                </div>
               </div>
             ))}
           </div>
@@ -1065,19 +1070,13 @@ function WeekView({
 
 function MonthView({
   events,
-
   date,
-
   projectMap,
-
   showWeekends,
 }: {
   events: StoredEvent[];
-
   date: Date;
-
   projectMap?: Map<number, Project>;
-
   showWeekends: boolean;
 }) {
   const {
@@ -1120,9 +1119,8 @@ function MonthView({
 
     resizeObserver.observe(gridElement);
 
-    // Cleanup
     return () => resizeObserver.disconnect();
-  }, [numRows, showWeekends]); // Re-calculate when rows or weekends change
+  }, [numRows, showWeekends]);
 
   const handleShowMore = (day: Date) => {
     setCurrentDate(day);
