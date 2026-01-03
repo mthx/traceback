@@ -486,13 +486,13 @@ export function Log() {
                   }}
                 >
                   <div
-                    className={`bg-background border-b border-border/30 px-4 py-2 ${groupIndex > 0 ? "border-t" : ""}`}
+                    className={`bg-background border-b border-neutral-200 dark:border-neutral-800 px-4 py-2 ${groupIndex > 0 ? "border-t" : ""}`}
                   >
                     <h2 className="text-xs font-semibold text-muted-foreground tracking-wide">
                       {formatDateLong(group.date.toISOString())}
                     </h2>
                   </div>
-                  <div className="divide-y divide-border/30">
+                  <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
                     {group.events.map((event) => {
                       const project = getEventProject(event);
                       const title = getEventTitle(event);

@@ -243,7 +243,7 @@ export function Settings() {
         </div>
 
         {/* Zen Browser Profile Section */}
-        <div className="space-y-4 pt-4 border-t">
+        <div className="space-y-4 pt-4">
           <div>
             <h2 className="text-lg font-semibold">Zen Browser Profile</h2>
             <p className="text-sm text-muted-foreground mt-1">
@@ -282,7 +282,7 @@ export function Settings() {
         </div>
 
         {/* GitHub Organizations Section */}
-        <div className="space-y-4 pt-4 border-t">
+        <div className="space-y-4 pt-4">
           <div>
             <h2 className="text-lg font-semibold">GitHub Organizations</h2>
             <p className="text-sm text-muted-foreground mt-1">
@@ -339,7 +339,7 @@ export function Settings() {
         </div>
 
         {/* Clear Data Section */}
-        <div className="space-y-4 pt-4 border-t">
+        <div className="space-y-4 pt-4">
           <div>
             <h2 className="text-lg font-semibold text-destructive">
               Clear All Data
@@ -375,7 +375,7 @@ export function Settings() {
               Cancel
             </Button>
             <Button variant="destructive" onClick={handleClearAllData}>
-              Yes, delete everything
+              Delete everything
             </Button>
           </DialogFooter>
         </DialogContent>
