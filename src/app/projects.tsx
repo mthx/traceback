@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEventDialog } from "@/contexts/rule-dialog-context";
 import { invoke } from "@tauri-apps/api/core";
-import { MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   CalendarControls,
@@ -31,15 +31,9 @@ import {
   type CalendarViewType,
 } from "../components/calendar-view";
 import type { DateRange } from "../components/date-range-filter";
-import { RuleEditDialog } from "../components/rule-edit-dialog";
-import type {
-  Project,
-  ProjectRule,
-  StoredEvent,
-  UIEvent,
-} from "../types/event";
+import type { Project, StoredEvent, UIEvent } from "../types/event";
 
-type ProjectTab = "calendar" | "events" | "rules";
+type ProjectTab = "calendar" | "events";
 
 interface ProjectsProps {
   projectId: number | null;
@@ -63,14 +57,11 @@ export function Projects({
 }: ProjectsProps) {
   const [project, setProject] = useState<Project | null>(null);
   const [events, setEvents] = useState<StoredEvent[]>([]);
-  const [rules, setRules] = useState<ProjectRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [isRuleDialogOpen, setIsRuleDialogOpen] = useState(false);
   const [formData, setFormData] = useState({ name: "", color: "#0173B2" });
-  const [editingRule, setEditingRule] = useState<ProjectRule | null>(null);
   const [calendarViewType, setCalendarViewType] =
     useState<CalendarViewType>("week");
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -89,19 +80,17 @@ export function Projects({
     setError(null);
 
     try {
-      const [projectData, eventsData, rulesData] = await Promise.all([
+      const [projectData, eventsData] = await Promise.all([
         invoke<Project | null>("get_project", { id: projectId }),
         invoke<StoredEvent[]>("get_events_by_project", {
           projectId,
           startDate: dateRange.startDate,
           endDate: dateRange.endDate,
         }),
-        invoke<ProjectRule[]>("get_project_rules", { projectId }),
       ]);
 
       setProject(projectData);
       setEvents(eventsData);
-      setRules(rulesData);
     } catch (err) {
       setError(err as string);
       console.error("Error fetching project details:", err);
@@ -148,39 +137,6 @@ export function Projects({
     } catch (err) {
       setError(err as string);
       console.error("Error deleting project:", err);
-    }
-  }
-
-  function openAddRuleDialog() {
-    setEditingRule(null);
-    setIsRuleDialogOpen(true);
-  }
-
-  function openEditRuleDialog(rule: ProjectRule) {
-    setEditingRule(rule);
-    setIsRuleDialogOpen(true);
-  }
-
-  async function handleDeleteRule(ruleId: number) {
-    try {
-      await invoke("delete_project_rule", { ruleId });
-      await fetchProjectDetails();
-    } catch (err) {
-      setError(err as string);
-      console.error("Error deleting rule:", err);
-    }
-  }
-
-  function getRuleLabel(rule: ProjectRule): string {
-    switch (rule.rule_type) {
-      case "organizer":
-        return `All events from: ${rule.match_value}`;
-      case "title_pattern":
-        return `All events containing: "${rule.match_value}"`;
-      case "repository":
-        return `All activity in: ${rule.match_value}`;
-      default:
-        return rule.match_value;
     }
   }
 
@@ -242,7 +198,6 @@ export function Projects({
             <TabsList>
               <TabsTrigger value="calendar">Calendar</TabsTrigger>
               <TabsTrigger value="events">Events</TabsTrigger>
-              <TabsTrigger value="rules">Rules</TabsTrigger>
             </TabsList>
           </div>
           <DropdownMenu>
@@ -347,60 +302,6 @@ export function Projects({
             <LogView projectId={projectId} />
           </div>
         </TabsContent>
-
-        <TabsContent value="rules" className="flex-1 overflow-y-auto mt-0">
-          <div className="space-y-4 px-4 pb-4">
-            <div className="flex items-center justify-between">
-              <Button onClick={openAddRuleDialog} size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Rule
-              </Button>
-            </div>
-
-            {rules.length === 0 ? (
-              <div className="p-6 border border-dashed rounded-lg text-center">
-                <p className="text-sm text-muted-foreground">
-                  No rules configured yet. Add a rule to automatically classify
-                  events.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {rules.map((rule) => (
-                  <div
-                    key={rule.id}
-                    className="flex items-center justify-between p-3 border rounded-lg"
-                  >
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">
-                        {getRuleLabel(rule)}
-                      </p>
-                      <p className="text-xs text-muted-foreground capitalize">
-                        {rule.rule_type.replace("_", " ")} rule
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditRuleDialog(rule)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => rule.id && handleDeleteRule(rule.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </TabsContent>
       </Tabs>
 
       {/* Edit Project Dialog */}
@@ -470,15 +371,6 @@ export function Projects({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <RuleEditDialog
-        project={project}
-        rule={editingRule}
-        event={null}
-        open={isRuleDialogOpen}
-        onOpenChange={setIsRuleDialogOpen}
-        onRuleSaved={fetchProjectDetails}
-      />
     </div>
   );
 }

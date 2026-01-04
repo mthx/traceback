@@ -7,6 +7,7 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import {
@@ -48,13 +49,14 @@ import { Calendar as CalendarPage } from "./calendar";
 import { Log } from "./log";
 import { Projects } from "./projects";
 import { Settings } from "./settings";
+import { Rules } from "./rules";
 import { useAutoSync, useSyncComplete } from "../hooks/sync-hooks";
 import type { DateRange } from "../components/date-range-filter";
 import { RuleDialogProvider } from "../contexts/rule-dialog-context";
 import { usePersistedState } from "../hooks/use-persisted-state";
 
-type Page = "calendar" | "log" | "projects" | "settings";
-type ProjectTab = "calendar" | "events" | "rules";
+type Page = "calendar" | "log" | "projects" | "settings" | "rules";
+type ProjectTab = "calendar" | "events";
 
 interface State {
   page: Page;
@@ -222,6 +224,7 @@ export function App() {
                     onShowWeekendsChange={setShowWeekends}
                   />
                 )}
+                {page === "rules" && <Rules />}
                 {page === "settings" && <Settings />}
               </main>
             </>
@@ -301,6 +304,15 @@ export function AppSidebar({
                 >
                   <CalendarIcon />
                   <span>Calendar</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => onChangePage("rules")}
+                  isActive={page === "rules"}
+                >
+                  <SlidersHorizontal />
+                  <span>Rules</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
