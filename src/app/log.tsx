@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { useSyncComplete } from "@/hooks/sync-hooks";
+import { usePersistedState } from "@/hooks/use-persisted-state";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -127,6 +128,8 @@ export function Log() {
   const [focusedEvent, setFocusedEvent] = useState<AggregatedEvent | null>(
     null
   );
+  const [persistedFocusedEventId, setPersistedFocusedEventId] =
+    usePersistedState<string | null>("logFocusedEventId", null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dayRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const eventRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -164,12 +167,13 @@ export function Log() {
 
       if (currentId !== newId) {
         setFocusedEvent(newFocusedEvent);
+        setPersistedFocusedEventId(newId);
       }
     };
 
     document.addEventListener("focusin", handleFocusChange);
     return () => document.removeEventListener("focusin", handleFocusChange);
-  }, [getEventById, focusedEvent]);
+  }, [getEventById, focusedEvent, setPersistedFocusedEventId]);
 
   useSyncComplete(() => {
     refreshData();
@@ -177,6 +181,21 @@ export function Log() {
 
   useEffect(() => {
     if (dayGroups.length > 0 && !focusedEvent) {
+      // Try to restore the persisted focused event
+      if (persistedFocusedEventId) {
+        const persistedEvent = getEventById(persistedFocusedEventId);
+        if (persistedEvent) {
+          const element = document.querySelector(
+            `[data-event-id="${persistedFocusedEventId}"]`
+          ) as HTMLElement;
+          if (element) {
+            element.focus();
+            return;
+          }
+        }
+      }
+
+      // Fall back to focusing the first event
       const firstEvent = dayGroups[0]?.events[0];
       if (firstEvent) {
         const eventId = getEventId(firstEvent);
@@ -188,7 +207,7 @@ export function Log() {
         }
       }
     }
-  }, [dayGroups, focusedEvent]);
+  }, [dayGroups, focusedEvent, persistedFocusedEventId, getEventById]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

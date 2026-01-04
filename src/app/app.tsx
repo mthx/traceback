@@ -51,6 +51,7 @@ import { Settings } from "./settings";
 import { useAutoSync, useSyncComplete } from "../hooks/sync-hooks";
 import type { DateRange } from "../components/date-range-filter";
 import { RuleDialogProvider } from "../contexts/rule-dialog-context";
+import { usePersistedState } from "../hooks/use-persisted-state";
 
 type Page = "calendar" | "log" | "projects" | "settings";
 type ProjectTab = "calendar" | "events" | "rules";
@@ -62,7 +63,7 @@ interface State {
 }
 
 export function App() {
-  const [state, setState] = useState<State>({
+  const [state, setState] = usePersistedState<State>("appState", {
     page: "calendar",
     selectedProjectId: null,
     projectTab: "calendar",
@@ -73,47 +74,13 @@ export function App() {
     startDate: null,
     endDate: null,
   });
-  const [showWeekends, setShowWeekends] = useState(false);
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [showWeekends, setShowWeekends] = usePersistedState<boolean>(
+    "showWeekends",
+    false
+  );
   const { page, selectedProjectId, projectTab } = state;
   const { permissionStatus, isChecking, syncState, triggerSync } =
     useAutoSync();
-
-  // Load showWeekends setting from database on mount
-  useEffect(() => {
-    async function loadSettings() {
-      try {
-        const value = await invoke<string | null>("get_setting", {
-          key: "showWeekends",
-        });
-        if (value !== null) {
-          setShowWeekends(value === "true");
-        }
-      } catch (err) {
-        console.error("Error loading settings:", err);
-      } finally {
-        setSettingsLoaded(true);
-      }
-    }
-    loadSettings();
-  }, []);
-
-  // Persist showWeekends to database whenever it changes (after initial load)
-  useEffect(() => {
-    if (!settingsLoaded) return;
-
-    async function saveSettings() {
-      try {
-        await invoke("set_setting", {
-          key: "showWeekends",
-          value: showWeekends.toString(),
-        });
-      } catch (err) {
-        console.error("Error saving settings:", err);
-      }
-    }
-    saveSettings();
-  }, [showWeekends, settingsLoaded]);
 
   // Fetch projects on mount
   useEffect(() => {

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Button } from "@/components/ui/button";
 import { useSyncComplete } from "@/hooks/sync-hooks";
+import { usePersistedState } from "@/hooks/use-persisted-state";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -71,16 +72,25 @@ export function Calendar({
   const [events, setEvents] = useState<StoredEvent[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [calendarViewType, setCalendarViewType] =
-    useState<CalendarViewType>("week");
-  const [calendarDate, setCalendarDate] = useState(new Date());
+    usePersistedState<CalendarViewType>("calendarViewType", "week");
+  const [calendarDate, setCalendarDate] = usePersistedState<string>(
+    "calendarDate",
+    new Date().toISOString()
+  );
   const { openEventDialog } = useEventDialog();
+
+  const dateObj = useMemo(() => new Date(calendarDate), [calendarDate]);
+
+  const setDateObj = useCallback(
+    (date: Date) => {
+      setCalendarDate(date.toISOString());
+    },
+    [setCalendarDate]
+  );
 
   const fetchData = useCallback(async () => {
     try {
-      const { start, end } = getVisibleDateRange(
-        calendarDate,
-        calendarViewType
-      );
+      const { start, end } = getVisibleDateRange(dateObj, calendarViewType);
 
       const [eventsData, projectsData] = await Promise.all([
         invoke<StoredEvent[]>("get_stored_events", {
@@ -95,7 +105,7 @@ export function Calendar({
     } catch (err) {
       console.error("Error fetching calendar data:", err);
     }
-  }, [calendarDate, calendarViewType]);
+  }, [dateObj, calendarViewType]);
 
   useEffect(() => {
     fetchData();
@@ -125,8 +135,8 @@ export function Calendar({
       events={events}
       viewType={calendarViewType}
       onViewTypeChange={setCalendarViewType}
-      currentDate={calendarDate}
-      onDateChange={setCalendarDate}
+      currentDate={dateObj}
+      onDateChange={setDateObj}
       projectMap={projectMap}
       showWeekends={showWeekends}
       onEventAssign={handleEventAssign}
