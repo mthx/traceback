@@ -24,9 +24,12 @@ import {
   isAggregatedBrowserEvent,
   isAggregatedRepositoryEvent,
 } from "@/types/event";
-import { EventHeader, EventContent } from "@/components/event-content";
+import {
+  EventHeader,
+  EventContent,
+  getEventIcon,
+} from "@/components/event-content";
 import { formatDateLong, formatEventTime } from "@/components/calendar-utils";
-import { getEventIcon } from "@/components/event-content";
 
 type AggregatedEvent =
   | AggregatedRepositoryEvent
@@ -86,16 +89,44 @@ function groupEventsByDay(events: AggregatedEvent[]): DayGroup[] {
 
 const DAYS_PER_PAGE = 30;
 
+function DetailPanel({
+  focusedEvent,
+  onAssignmentComplete,
+}: {
+  focusedEvent: AggregatedEvent | null;
+  onAssignmentComplete: () => void;
+}) {
+  return (
+    <div className="flex-2 flex flex-col min-w-80">
+      {focusedEvent ? (
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          <div className="space-y-3">
+            <EventHeader event={focusedEvent} />
+            <EventContent
+              event={focusedEvent}
+              onAssignmentComplete={onAssignmentComplete}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-center h-full text-muted-foreground">
+          Select an event to view details
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Log() {
   const [dayGroups, setDayGroups] = useState<DayGroup[]>([]);
   const [projects, setProjects] = useState<Map<number, Project>>(new Map());
-  const [selectedEvent, setSelectedEvent] = useState<AggregatedEvent | null>(
-    null
-  );
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [oldestDate, setOldestDate] = useState<Date | null>(null);
+  const [focusedEvent, setFocusedEvent] = useState<AggregatedEvent | null>(
+    null
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const dayRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const eventRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -105,26 +136,46 @@ export function Log() {
     fetchInitialData();
   }, []);
 
-  useSyncComplete(fetchInitialData);
+  const getEventById = useCallback(
+    (id: string): AggregatedEvent | undefined => {
+      for (const group of dayGroups) {
+        const event = group.events.find((e) => getEventId(e) === id);
+        if (event) return event;
+      }
+      return undefined;
+    },
+    [dayGroups]
+  );
 
+  // Track focus changes and update focusedEvent state
   useEffect(() => {
-    if (dayGroups.length > 0 && !selectedEvent) {
+    const handleFocusChange = () => {
+      const focusedElement = document.activeElement as HTMLElement;
+      const eventId = focusedElement?.dataset?.eventId;
+      setFocusedEvent(eventId ? getEventById(eventId) || null : null);
+    };
+
+    document.addEventListener("focusin", handleFocusChange);
+    return () => document.removeEventListener("focusin", handleFocusChange);
+  }, [getEventById]);
+
+  useSyncComplete(() => {
+    refreshData();
+  });
+
+  // Focus first event on initial load
+  useEffect(() => {
+    const activeElement = document.activeElement as HTMLElement;
+    const hasEventFocused = activeElement?.dataset?.eventId;
+    if (dayGroups.length > 0 && !hasEventFocused) {
       const firstEvent = dayGroups[0].events[0];
       if (firstEvent) {
-        setSelectedEvent(firstEvent);
+        const eventId = getEventId(firstEvent);
+        const element = eventRefs.current.get(eventId);
+        element?.focus();
       }
     }
-  }, [dayGroups, selectedEvent]);
-
-  useEffect(() => {
-    if (selectedEvent) {
-      const eventId = getEventId(selectedEvent);
-      const element = eventRefs.current.get(eventId);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }
-    }
-  }, [selectedEvent]);
+  }, [dayGroups]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -148,24 +199,34 @@ export function Log() {
       if (e.key === "ArrowUp" || e.key === "ArrowDown") {
         e.preventDefault();
 
-        if (!selectedEvent) return;
+        const focusedElement = document.activeElement as HTMLButtonElement;
+        const currentEventId = focusedElement?.dataset.eventId;
+        if (!currentEventId) return;
 
-        const currentIndex = allEvents.findIndex((event) =>
-          eventsAreEqual(event, selectedEvent)
+        const currentIndex = allEvents.findIndex(
+          (event) => getEventId(event) === currentEventId
         );
 
         if (currentIndex === -1) return;
 
+        let targetEvent: AggregatedEvent | null = null;
         if (e.key === "ArrowDown" && currentIndex < allEvents.length - 1) {
-          setSelectedEvent(allEvents[currentIndex + 1]);
+          targetEvent = allEvents[currentIndex + 1];
         } else if (e.key === "ArrowUp" && currentIndex > 0) {
-          setSelectedEvent(allEvents[currentIndex - 1]);
+          targetEvent = allEvents[currentIndex - 1];
+        }
+
+        if (targetEvent) {
+          const targetId = getEventId(targetEvent);
+          const element = eventRefs.current.get(targetId);
+          element?.focus();
         }
       } else {
         const scrollContainer = scrollRef.current;
         if (!scrollContainer) return;
 
-        const currentEventId = selectedEvent ? getEventId(selectedEvent) : null;
+        const focusedElement = document.activeElement as HTMLButtonElement;
+        const currentEventId = focusedElement?.dataset.eventId;
         const currentElement = currentEventId
           ? eventRefs.current.get(currentEventId)
           : null;
@@ -198,7 +259,9 @@ export function Log() {
           }
 
           if (closestEvent) {
-            setSelectedEvent(closestEvent);
+            const targetId = getEventId(closestEvent);
+            const element = eventRefs.current.get(targetId);
+            element?.focus();
           }
         });
       }
@@ -206,7 +269,7 @@ export function Log() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedEvent, dayGroups]);
+  }, [dayGroups]);
 
   async function fetchInitialData() {
     setLoading(true);
@@ -276,6 +339,71 @@ export function Log() {
       console.error("Error fetching events:", err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function refreshData() {
+    try {
+      const endDate = new Date();
+      const startDate = oldestDate || new Date();
+
+      const [eventsData, projectsData, githubOrgs] = await Promise.all([
+        invoke<StoredEvent[]>("get_stored_events", {
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+        }),
+        invoke<Project[]>("get_all_projects"),
+        getGitHubOrgs(),
+      ]);
+
+      const projectMap = new Map(projectsData.map((p) => [p.id, p]));
+      setProjects(projectMap);
+
+      const repositoryAggregates = aggregateRepositoryEvents(eventsData);
+      const coveredRepoPaths = new Set(
+        repositoryAggregates.map((agg) => agg.repository_path)
+      );
+
+      const gitAggregates = aggregateGitEvents(eventsData).filter(
+        (aggregate) => {
+          const hasCoveredRepoPath = aggregate.activities.some((activity) => {
+            const data = JSON.parse(activity.type_specific_data || "{}");
+            return (
+              data.repository_path && coveredRepoPaths.has(data.repository_path)
+            );
+          });
+          return !hasCoveredRepoPath;
+        }
+      );
+
+      const browserAggregates = aggregateBrowserEvents(
+        eventsData,
+        githubOrgs
+      ).filter((aggregate) => {
+        const hasCoveredRepoPath = aggregate.visits.some((visit) => {
+          const data = JSON.parse(visit.type_specific_data || "{}");
+          return (
+            data.repository_path && coveredRepoPaths.has(data.repository_path)
+          );
+        });
+        return !hasCoveredRepoPath;
+      });
+
+      const calendarEvents = eventsData.filter(
+        (e) => e.event_type === "calendar"
+      );
+
+      const combined: AggregatedEvent[] = [
+        ...repositoryAggregates,
+        ...gitAggregates,
+        ...browserAggregates,
+        ...calendarEvents,
+      ];
+
+      const grouped = groupEventsByDay(combined);
+      setDayGroups(grouped);
+    } catch (err) {
+      console.error("Error refreshing events:", err);
     }
   }
 
@@ -432,10 +560,6 @@ export function Log() {
     }
   }
 
-  function eventsAreEqual(a: AggregatedEvent, b: AggregatedEvent): boolean {
-    return getEventId(a) === getEventId(b);
-  }
-
   return (
     <div className="flex h-full">
       <div className="flex-3 flex flex-col border-r min-w-0">
@@ -514,12 +638,11 @@ export function Log() {
                         aggregateType as any,
                         domain
                       );
-                      const isSelected =
-                        selectedEvent && eventsAreEqual(event, selectedEvent);
 
                       return (
                         <button
                           key={getEventId(event)}
+                          data-event-id={getEventId(event)}
                           ref={(el) => {
                             const eventId = getEventId(event);
                             if (el) {
@@ -528,12 +651,10 @@ export function Log() {
                               eventRefs.current.delete(eventId);
                             }
                           }}
-                          onClick={() => setSelectedEvent(event)}
-                          className={`relative w-full pl-8 pr-4 py-2.5 text-left transition-colors ${
-                            isSelected
-                              ? "bg-accent/70 before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-accent-foreground"
-                              : "hover:bg-muted/30"
-                          }`}
+                          onClick={(e) => {
+                            e.currentTarget.focus();
+                          }}
+                          className="relative w-full pl-8 pr-4 py-2.5 text-left transition-colors hover:bg-muted/30 focus:bg-accent/70 focus:outline-none focus:before:absolute focus:before:left-0 focus:before:top-0 focus:before:bottom-0 focus:before:w-0.5 focus:before:bg-accent-foreground"
                         >
                           <div className="flex items-start gap-3">
                             <div className="mt-0.5">
@@ -578,23 +699,10 @@ export function Log() {
         </div>
       </div>
 
-      <div className="flex-2 flex flex-col min-w-80">
-        {selectedEvent ? (
-          <div className="flex-1 overflow-y-auto px-4 py-4">
-            <div className="space-y-3">
-              <EventHeader event={selectedEvent} />
-              <EventContent
-                event={selectedEvent}
-                onAssignmentComplete={fetchInitialData}
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            Select an event to view details
-          </div>
-        )}
-      </div>
+      <DetailPanel
+        focusedEvent={focusedEvent}
+        onAssignmentComplete={fetchInitialData}
+      />
     </div>
   );
 }
