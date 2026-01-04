@@ -13,6 +13,7 @@ import {
   isAggregatedRepositoryEvent,
 } from "@/types/event";
 import { invoke } from "@tauri-apps/api/core";
+import { useRuleDialog } from "@/contexts/rule-dialog-context";
 import {
   Calendar,
   Check,
@@ -259,15 +260,14 @@ interface EventContentProps {
     | AggregatedRepositoryEvent;
   onAssignmentComplete?: () => void;
   showHeader?: boolean;
-  onCreateRule?: (project: Project, event: StoredEvent) => void;
 }
 
 export function EventContent({
   event,
   onAssignmentComplete,
   showHeader = false,
-  onCreateRule,
 }: EventContentProps) {
+  const { openRuleDialog } = useRuleDialog();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(
     event.project_id || null
@@ -401,7 +401,7 @@ export function EventContent({
     : null;
 
   function handleCreateRule() {
-    if (selectedProject && onCreateRule) {
+    if (selectedProject) {
       let eventForRule: StoredEvent;
       if (isAggregatedRepositoryEvent(event)) {
         // Prefer git activities, fallback to browser visits
@@ -413,7 +413,7 @@ export function EventContent({
       } else {
         eventForRule = event;
       }
-      onCreateRule(selectedProject, eventForRule);
+      openRuleDialog(selectedProject, eventForRule, onAssignmentComplete);
     }
   }
 
@@ -430,7 +430,7 @@ export function EventContent({
           isAssigning={isAssigning}
           onProjectSelect={handleAssign}
           onUnassign={handleUnassign}
-          onCreateRule={onCreateRule ? handleCreateRule : undefined}
+          onCreateRule={handleCreateRule}
         />
       </div>
 

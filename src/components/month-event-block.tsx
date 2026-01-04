@@ -21,7 +21,6 @@ import {
   getEventBlockStyle,
   formatEventTime,
 } from "./calendar-utils";
-import { useRuleDialog } from "@/contexts/rule-dialog-context";
 
 interface MonthEventBlockProps {
   event?: StoredEvent;
@@ -42,8 +41,6 @@ export function MonthEventBlock({
   onClick,
   onAssignmentComplete,
 }: MonthEventBlockProps) {
-  const { openRuleDialog } = useRuleDialog();
-
   if (repositoryAggregate) {
     // Repository aggregate (unified git + browser)
     const eventColor = getEventColor(repositoryAggregate, projectMap);
@@ -78,9 +75,6 @@ export function MonthEventBlock({
           <RepositoryAggregateTooltipContent
             aggregate={repositoryAggregate}
             onAssignmentComplete={onAssignmentComplete}
-            onCreateRule={(project, event) =>
-              openRuleDialog(project, event, onAssignmentComplete)
-            }
           />
         </TooltipContent>
       </Tooltip>
@@ -121,9 +115,6 @@ export function MonthEventBlock({
           <BrowserAggregateTooltipContent
             aggregate={browserAggregate}
             onAssignmentComplete={onAssignmentComplete}
-            onCreateRule={(project, event) =>
-              openRuleDialog(project, event, onAssignmentComplete)
-            }
           />
         </TooltipContent>
       </Tooltip>
@@ -164,9 +155,6 @@ export function MonthEventBlock({
           <GitAggregateTooltipContent
             aggregate={gitAggregate}
             onAssignmentComplete={onAssignmentComplete}
-            onCreateRule={(project, event) =>
-              openRuleDialog(project, event, onAssignmentComplete)
-            }
           />
         </TooltipContent>
       </Tooltip>
@@ -207,9 +195,6 @@ export function MonthEventBlock({
           <CalendarEventTooltipContent
             event={event}
             onAssignmentComplete={onAssignmentComplete}
-            onCreateRule={(project, event) =>
-              openRuleDialog(project, event, onAssignmentComplete)
-            }
           />
         </TooltipContent>
       </Tooltip>

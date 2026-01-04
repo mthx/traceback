@@ -5,12 +5,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useRuleDialog } from "@/contexts/rule-dialog-context";
 import type {
   AggregatedGitEvent,
   AggregatedBrowserEvent,
   AggregatedRepositoryEvent,
-  Project,
   StoredEvent,
 } from "@/types/event";
 
@@ -32,13 +30,7 @@ export function EventDetailsDialog({
   event,
   onAssignmentComplete,
 }: EventDetailsDialogProps) {
-  const { openRuleDialog } = useRuleDialog();
-
   if (!event) return null;
-
-  function handleCreateRule(project: Project, eventForRule: StoredEvent) {
-    openRuleDialog(project, eventForRule, onAssignmentComplete);
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -53,7 +45,6 @@ export function EventDetailsDialog({
           <EventContent
             event={event}
             onAssignmentComplete={onAssignmentComplete}
-            onCreateRule={handleCreateRule}
           />
         </div>
       </DialogContent>

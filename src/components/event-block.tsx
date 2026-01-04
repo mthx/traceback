@@ -22,7 +22,6 @@ import {
   getEventBlockStyle,
   formatEventTime,
 } from "./calendar-utils";
-import { useRuleDialog } from "@/contexts/rule-dialog-context";
 
 interface EventBlockProps {
   event?: StoredEvent;
@@ -52,8 +51,6 @@ export function EventBlock({
   onAssignmentComplete,
   className = "",
 }: EventBlockProps) {
-  const { openRuleDialog } = useRuleDialog();
-
   if (repositoryAggregate) {
     // Repository aggregate event (unified git + browser)
     const project =
@@ -95,9 +92,6 @@ export function EventBlock({
           <RepositoryAggregateTooltipContent
             aggregate={repositoryAggregate}
             onAssignmentComplete={onAssignmentComplete}
-            onCreateRule={(project, event) =>
-              openRuleDialog(project, event, onAssignmentComplete)
-            }
           />
         </TooltipContent>
       </Tooltip>
@@ -188,9 +182,6 @@ export function EventBlock({
           <GitAggregateTooltipContent
             aggregate={gitAggregate}
             onAssignmentComplete={onAssignmentComplete}
-            onCreateRule={(project, event) =>
-              openRuleDialog(project, event, onAssignmentComplete)
-            }
           />
         </TooltipContent>
       </Tooltip>
@@ -234,9 +225,6 @@ export function EventBlock({
           <CalendarEventTooltipContent
             event={event}
             onAssignmentComplete={onAssignmentComplete}
-            onCreateRule={(project, event) =>
-              openRuleDialog(project, event, onAssignmentComplete)
-            }
           />
         </TooltipContent>
       </Tooltip>
