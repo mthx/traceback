@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { ColorPicker } from "@/components/color-picker";
+import { LogView } from "@/components/log-view";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,87 +18,28 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ColorPicker } from "@/components/color-picker";
-import { MoreVertical, Pencil, Trash2, Plus } from "lucide-react";
-import type {
-  StoredEvent,
-  Project,
-  ProjectRule,
-  UIEvent,
-} from "../types/event";
-import type { DateRange } from "../components/date-range-filter";
-import { RuleEditDialog } from "../components/rule-edit-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useEventDialog } from "@/contexts/rule-dialog-context";
+import { invoke } from "@tauri-apps/api/core";
+import { MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import {
-  CalendarViewProvider,
-  CalendarDateLabel,
   CalendarControls,
+  CalendarDateLabel,
   CalendarGrid,
+  CalendarViewProvider,
   type CalendarViewType,
 } from "../components/calendar-view";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { EventsList } from "@/components/events-list";
-import { useEventDialog } from "@/contexts/rule-dialog-context";
+import type { DateRange } from "../components/date-range-filter";
+import { RuleEditDialog } from "../components/rule-edit-dialog";
+import type {
+  Project,
+  ProjectRule,
+  StoredEvent,
+  UIEvent,
+} from "../types/event";
 
 type ProjectTab = "calendar" | "events" | "rules";
-
-interface ProjectHeaderProps {
-  project: Project;
-  onEdit: () => void;
-  onDelete: () => void;
-  showWeekendToggle?: boolean;
-  showWeekends?: boolean;
-  onShowWeekendsChange?: (show: boolean) => void;
-}
-
-function ProjectHeader({
-  project,
-  onEdit,
-  onDelete,
-  showWeekendToggle = false,
-  showWeekends = false,
-  onShowWeekendsChange,
-}: ProjectHeaderProps) {
-  return (
-    <div className="flex items-center justify-between px-4 py-2">
-      <div className="flex items-center gap-3">
-        <div
-          className="w-5 h-5 rounded-full shrink-0"
-          style={{
-            backgroundColor: project.color || "#0173B2",
-          }}
-        />
-        <h1 className="text-xl font-semibold">{project.name}</h1>
-      </div>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon">
-            <MoreVertical className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {showWeekendToggle && onShowWeekendsChange && (
-            <>
-              <DropdownMenuItem
-                onClick={() => onShowWeekendsChange(!showWeekends)}
-              >
-                {showWeekends ? "Hide Weekends" : "Show Weekends"}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
-          )}
-          <DropdownMenuItem onClick={onEdit}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit Project
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onDelete} className="text-destructive">
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete Project
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
-}
 
 interface ProjectsProps {
   projectId: number | null;
@@ -296,12 +237,44 @@ export function Projects({
         onValueChange={(value) => onProjectTabChange(value as ProjectTab)}
         className="flex-1 flex flex-col min-h-0"
       >
-        <div className="flex items-center justify-center pt-3">
-          <TabsList>
-            <TabsTrigger value="calendar">Calendar</TabsTrigger>
-            <TabsTrigger value="events">Events</TabsTrigger>
-            <TabsTrigger value="rules">Rules</TabsTrigger>
-          </TabsList>
+        <div className="flex items-center justify-center pt-3 pr-3">
+          <div className="flex-1 flex items-center justify-center">
+            <TabsList>
+              <TabsTrigger value="calendar">Calendar</TabsTrigger>
+              <TabsTrigger value="events">Events</TabsTrigger>
+              <TabsTrigger value="rules">Rules</TabsTrigger>
+            </TabsList>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {onShowWeekendsChange && (
+                <>
+                  <DropdownMenuItem
+                    onClick={() => onShowWeekendsChange(!showWeekends)}
+                  >
+                    {showWeekends ? "Hide Weekends" : "Show Weekends"}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              <DropdownMenuItem onClick={openEditDialog}>
+                <Pencil className="mr-2 h-4 w-4" />
+                Edit Project
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setIsDeleteOpen(true)}
+                className="text-destructive"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete Project
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <TabsContent
@@ -309,16 +282,9 @@ export function Projects({
           className="flex-1 min-h-0 mt-0 flex flex-col"
         >
           {events.length === 0 ? (
-            <>
-              <ProjectHeader
-                project={project}
-                onEdit={openEditDialog}
-                onDelete={() => setIsDeleteOpen(true)}
-              />
-              <p className="text-sm text-muted-foreground px-4 pt-2">
-                No events tagged with this project yet.
-              </p>
-            </>
+            <p className="text-sm text-muted-foreground px-4 pt-2">
+              No events tagged with this project yet.
+            </p>
           ) : (
             <CalendarViewProvider
               events={events}
@@ -377,25 +343,12 @@ export function Projects({
           value="events"
           className="flex-1 min-h-0 mt-0 flex flex-col"
         >
-          <ProjectHeader
-            project={project}
-            onEdit={openEditDialog}
-            onDelete={() => setIsDeleteOpen(true)}
-          />
           <div className="flex-1 min-h-0">
-            <EventsList
-              projectId={projectId}
-              onEventAssign={fetchProjectDetails}
-            />
+            <LogView projectId={projectId} />
           </div>
         </TabsContent>
 
         <TabsContent value="rules" className="flex-1 overflow-y-auto mt-0">
-          <ProjectHeader
-            project={project}
-            onEdit={openEditDialog}
-            onDelete={() => setIsDeleteOpen(true)}
-          />
           <div className="space-y-4 px-4 pb-4">
             <div className="flex items-center justify-between">
               <Button onClick={openAddRuleDialog} size="sm">

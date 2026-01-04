@@ -1,77 +1,56 @@
+import {
+  DropboxIcon,
+  GitHubIcon,
+  GoogleDocsIcon,
+  NotionIcon,
+} from "@/components/brand-icons";
+import { formatDateLong, formatEventTime } from "@/components/calendar-utils";
 import { EventDetails } from "@/components/event-details";
 import { Button } from "@/components/ui/button";
+import { useRuleDialog } from "@/contexts/rule-dialog-context";
 import type { Project, UIEvent } from "@/types/event";
 import { invoke } from "@tauri-apps/api/core";
-import { useRuleDialog } from "@/contexts/rule-dialog-context";
 import {
   Calendar,
   Check,
-  GitBranch,
-  Globe,
   FileText,
+  Globe,
   KanbanSquare,
-  MessageSquare,
   type LucideIcon,
 } from "lucide-react";
-import {
-  GitHubIcon,
-  GoogleDocsIcon,
-  DropboxIcon,
-  NotionIcon,
-  FigmaIcon,
-} from "@/components/brand-icons";
-import { useEffect, useState } from "react";
-import { formatDateLong, formatEventTime } from "@/components/calendar-utils";
-import type { BrowserAggregateType } from "@/types/event";
 import type { ComponentType } from "react";
+import { useEffect, useState } from "react";
 
 type IconComponent =
   | LucideIcon
   | ComponentType<{ className?: string; size?: number }>;
 
-// Get platform-specific icon for collaborative docs
-function getCollaborativeDocIcon(domain: string): IconComponent {
-  if (domain.includes("dropbox.com")) {
+function getPlatformIcon(domain?: string): IconComponent {
+  if (domain?.includes("dropbox.com")) {
     return DropboxIcon;
   } else if (domain === "docs.google.com") {
     return GoogleDocsIcon;
-  } else if (domain.includes("notion.")) {
+  } else if (domain?.includes("notion.")) {
     return NotionIcon;
-  } else if (domain.includes("monday.com")) {
-    return KanbanSquare; // Monday.com (boards/docs) - fallback to Lucide
-  } else if (domain.includes("slack.com")) {
-    return MessageSquare; // Slack - fallback to Lucide
-  } else if (domain.includes("figma.com")) {
-    return FigmaIcon;
+  } else if (domain?.includes("monday.com")) {
+    return KanbanSquare;
   }
-  return FileText; // Default for collaborative docs
+  return FileText;
 }
 
 // Get the appropriate icon for an event type or browser aggregate
-export function getEventIcon(
-  eventType: string,
-  browserAggregateType?: BrowserAggregateType,
-  domain?: string
-): IconComponent {
-  if (eventType === "git") {
-    return GitBranch;
-  } else if (eventType === "browser_history" && browserAggregateType) {
-    // Check if this is GitHub to use the GitHub icon
-    if (domain === "github.com") {
+export function getEventIcon(event: UIEvent): IconComponent {
+  switch (event.type) {
+    case "calendar":
+      return Calendar;
+    case "document":
+      return getPlatformIcon(event.domain);
+    case "repository":
       return GitHubIcon;
-    }
-    // Use platform-specific icons for collaborative docs
-    if (browserAggregateType === "document" && domain) {
-      return getCollaborativeDocIcon(domain);
-    } else if (browserAggregateType === "code_repo") {
-      return GitBranch;
-    } else {
+    case "research":
       return Globe;
-    }
-  } else if (eventType === "browser_history") {
-    return Globe;
-  } else {
-    return Calendar;
+    default:
+      throw new Error();
   }
 }
 
@@ -91,52 +70,16 @@ interface EventHeaderProps {
 }
 
 export function EventHeader({ event }: EventHeaderProps) {
-  const title = event.title;
-  let eventType =
-    event.type === "repository" || event.type === "git"
-      ? "git"
-      : event.type === "browser"
-        ? "browser_history"
-        : "calendar";
-  let browserAggregateType = event.aggregate_type;
-  let domain = event.domain;
-
-  // Special handling for repository events that are GitHub repos
-  if (event.type === "repository") {
-    if (
-      event.origin_url?.includes("github.com") ||
-      event.repository_path?.includes("github.com")
-    ) {
-      eventType = "browser_history";
-      browserAggregateType = "code_repo";
-      domain = "github.com";
-    }
-  } else if (event.type === "git") {
-    // Check if this is a GitHub repository
-    const firstActivity = event.activities[0];
-    if (firstActivity) {
-      try {
-        const data = JSON.parse(firstActivity.type_specific_data || "{}");
-        if (data.origin_url?.includes("github.com")) {
-          eventType = "browser_history";
-          browserAggregateType = "code_repo";
-          domain = "github.com";
-        }
-      } catch {
-        // Ignore parse errors
-      }
-    }
-  }
-
-  const Icon = getEventIcon(eventType, browserAggregateType, domain);
-
+  console.log(event);
+  const Icon = getEventIcon(event);
+  console.log(Icon);
   return (
     <div className="flex items-start gap-2">
       <Icon
         className="h-5 w-5 mt-0.75 text-muted-foreground shrink-0"
         size={20}
       />
-      <span className="font-semibold text-lg">{title}</span>
+      <span className="font-semibold text-lg">{event.title}</span>
     </div>
   );
 }

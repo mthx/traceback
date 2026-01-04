@@ -1,0 +1,12 @@
+Add rules sidebar entry.
+Ensure rules are logical
+Add date ranges to rules (to support the primary focus on a repo changing project over time)
+Add user defined "note" log entries
+Start storing time against projects on a daily basis - independent from events and their aggregations but informed by them from a user perspective.
+Access via the log entry for a day
+Add an entry for a week and a month too with aggregations
+Move Settings to the bottom of the sidebar.
+Fix the crappy looking calendar control in the log view
+Fix the handling of dates with no content
+
+And... that's all folks?

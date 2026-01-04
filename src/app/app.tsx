@@ -201,13 +201,13 @@ export function App() {
                 onProjectCreated={fetchProjects}
               />
               <main className="flex-1 border-l overflow-y-auto h-full">
+                {page === "log" && <Log />}
                 {page === "calendar" && (
                   <CalendarPage
                     showWeekends={showWeekends}
                     onShowWeekendsChange={setShowWeekends}
                   />
                 )}
-                {page === "log" && <Log />}
                 {page === "projects" && (
                   <Projects
                     projectId={selectedProjectId}
@@ -287,20 +287,20 @@ export function AppSidebar({
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => onChangePage("calendar")}
-                  isActive={page === "calendar"}
-                >
-                  <CalendarIcon />
-                  <span>Calendar</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
                   onClick={() => onChangePage("log")}
                   isActive={page === "log"}
                 >
                   <ListIcon />
                   <span>Log</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => onChangePage("calendar")}
+                  isActive={page === "calendar"}
+                >
+                  <CalendarIcon />
+                  <span>Calendar</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>

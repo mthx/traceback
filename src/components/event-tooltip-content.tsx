@@ -1,15 +1,15 @@
 import { EventContent, EventHeader } from "@/components/event-content";
 import type { UIEvent } from "@/types/event";
 
-interface CalendarEventTooltipContentProps {
+interface EventTooltipContentProps {
   event: UIEvent;
   onAssignmentComplete?: () => void;
 }
 
-export function CalendarEventTooltipContent({
+export function EventTooltipContent({
   event,
   onAssignmentComplete,
-}: CalendarEventTooltipContentProps) {
+}: EventTooltipContentProps) {
   return (
     <div className="space-y-3">
       <EventHeader event={event} />

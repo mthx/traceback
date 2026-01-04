@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/tooltip";
 import { EventBlock } from "@/components/event-block";
 import { MonthEventBlock } from "@/components/month-event-block";
-import { CalendarEventTooltipContent } from "@/components/event-tooltip-content";
+import { EventTooltipContent } from "@/components/event-tooltip-content";
 import {
   isToday,
   todayIndicatorClass,
@@ -488,7 +488,7 @@ function AllDayEventsRow({
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" align="start">
-                <CalendarEventTooltipContent
+                <EventTooltipContent
                   event={event}
                   onAssignmentComplete={() => {}}
                 />

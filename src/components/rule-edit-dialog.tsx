@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Project, ProjectRule, StoredEvent } from "../types/event";
-import { parseEventData, parseGitEventData } from "../types/event";
+import { parseCalendarEventData, parseGitEventData } from "../types/event";
 
 interface RuleEditDialogProps {
   project: Project | null;
@@ -47,7 +47,7 @@ export function RuleEditDialog({
         matchValue: rule.match_value,
       });
     } else if (event) {
-      const eventData = parseEventData(event);
+      const eventData = parseCalendarEventData(event);
       const gitData = parseGitEventData(event);
 
       if (eventData?.organizer) {

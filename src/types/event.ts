@@ -89,7 +89,9 @@ export type CalendarPermissionStatus =
   | "Restricted"
   | "NotDetermined";
 
-export function parseEventData(event: StoredEvent): CalendarEventData | null {
+export function parseCalendarEventData(
+  event: StoredEvent
+): CalendarEventData | null {
   if (event.event_type !== "calendar" || !event.type_specific_data) {
     return null;
   }
@@ -127,162 +129,21 @@ export function parseBrowserEventData(
   }
 }
 
-export interface AggregatedGitEvent {
-  id: string; // composite ID for react keys
-  repository_id: string;
-  repository_name: string;
-  start_date: string;
-  end_date: string;
-  activities: StoredEvent[]; // individual git events
-  project_id?: number;
-}
-
-export function aggregateGitEvents(
-  events: StoredEvent[]
-): AggregatedGitEvent[] {
-  // Filter only git events
-  const gitEvents = events.filter((e) => e.event_type === "git");
-
-  // Group by repository and day
-  const byRepoAndDay = new Map<string, StoredEvent[]>();
-
-  for (const event of gitEvents) {
-    const gitData = parseGitEventData(event);
-    if (!gitData) continue;
-
-    // Create key: repository_id + date (YYYY-MM-DD)
-    const dateKey = formatDateKey(event.start_date);
-    const key = `${gitData.repository_id}:${dateKey}`;
-
-    if (!byRepoAndDay.has(key)) {
-      byRepoAndDay.set(key, []);
-    }
-    byRepoAndDay.get(key)!.push(event);
-  }
-
-  // Create aggregated events - one per repository per day
-  const aggregated: AggregatedGitEvent[] = [];
-
-  for (const [, repoEvents] of byRepoAndDay.entries()) {
-    if (repoEvents.length === 0) continue;
-
-    // Sort by time
-    const sorted = repoEvents.sort(
-      (a, b) =>
-        new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
-    );
-
-    // Create single aggregate for all events in this repo on this day
-    aggregated.push(createAggregateFromGroup(sorted));
-  }
-
-  return aggregated;
-}
-
-function createAggregateFromGroup(events: StoredEvent[]): AggregatedGitEvent {
-  const gitData = parseGitEventData(events[0])!;
-
-  // Find min start and max end times
-  const startTimes = events.map((e) => new Date(e.start_date).getTime());
-  const endTimes = events.map((e) => new Date(e.end_date).getTime());
-
-  let minStart = Math.min(...startTimes);
-  const maxEnd = Math.max(...endTimes);
-
-  // If the first event (earliest) is a commit, extend start time back by 30 minutes
-  // as a heuristic to model the work that led to the commit
-  const firstEventData = parseGitEventData(events[0]);
-  if (firstEventData?.activity_type === "commit") {
-    const THIRTY_MINUTES_MS = 30 * 60 * 1000;
-    minStart = minStart - THIRTY_MINUTES_MS;
-  }
-
-  return {
-    id: `git-${gitData.repository_id}-${minStart}`,
-    repository_id: gitData.repository_id,
-    repository_name: gitData.repository_name,
-    start_date: new Date(minStart).toISOString(),
-    end_date: new Date(maxEnd).toISOString(),
-    activities: events,
-    project_id: events[0].project_id,
-  };
-}
-
-export function isAggregatedGitEvent(
-  event: StoredEvent | AggregatedGitEvent | AggregatedBrowserEvent
-): event is AggregatedGitEvent {
-  return "repository_id" in event && "activities" in event;
-}
-
 // ============================================================================
-// Browser Event Aggregation
+// Repository Event Aggregation (Unified Git + GitHub browser history)
 // ============================================================================
 
-export type BrowserAggregateType =
-  | "document"
-  | "code_repo"
-  | "project_tool"
-  | "domain";
-
-export interface AggregatedBrowserEvent {
-  id: string; // composite ID for react keys
-  aggregate_key: string; // domain or document identifier (e.g., "github:org/repo", "dropbox-paper:doc-id")
-  aggregate_type: BrowserAggregateType;
-  domain: string;
-  title: string;
-  start_date: string;
-  end_date: string;
-  visits: StoredEvent[]; // individual browser_history events
-  project_id?: number;
-
-  // Extracted metadata
-  document_id?: string;
-  repository?: string;
-  workspace?: string;
-}
-
-// ============================================================================
-// Repository Event Aggregation (Unified Git + Browser)
-// ============================================================================
-
-export interface AggregatedRepositoryEvent {
-  id: string; // composite ID for react keys
-  repository_path: string; // canonical "org/repo" path
-  repository_name: string; // display name (just "repo")
-  start_date: string;
-  end_date: string;
-  git_activities: StoredEvent[]; // git events
-  browser_visits: StoredEvent[]; // browser_history events
-  project_id?: number;
-  origin_url?: string; // full remote origin URL
-}
-
-export function isAggregatedRepositoryEvent(
-  event: unknown
-): event is AggregatedRepositoryEvent {
-  return (
-    typeof event === "object" &&
-    event !== null &&
-    "repository_path" in event &&
-    "git_activities" in event &&
-    "browser_visits" in event
-  );
-}
-
-interface DomainConfig {
+interface DocumentDomainConfigs {
   pattern: RegExp; // domain pattern to match
-  type: BrowserAggregateType;
   // Extract a stable identifier for grouping visits (e.g., repo path, document title)
   extractGroupingKey: (url: string, pageTitle: string) => string | null;
-  // Generate display title from the grouping key
-  generateTitle: (groupingKey: string) => string;
+  type: "document" | "research";
 }
 
-const DOMAIN_CONFIGS: DomainConfig[] = [
+const documentDomainConfigs: DocumentDomainConfigs[] = [
   // Dropbox Paper (including www.dropbox.com paper links)
   {
     pattern: /^(paper\.dropbox\.com|www\.dropbox\.com)$/,
-    type: "document",
     extractGroupingKey: (url, pageTitle) => {
       // Filter out root domains, search pages, and folder views
       if (
@@ -318,12 +179,11 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
 
       return cleanTitle;
     },
-    generateTitle: (groupingKey) => groupingKey,
+    type: "document",
   },
   // Google Docs/Sheets/Slides
   {
     pattern: /^docs\.google\.com$/,
-    type: "document",
     extractGroupingKey: (url, pageTitle) => {
       // Filter out root domain
       if (
@@ -351,13 +211,23 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
 
       return cleanTitle;
     },
-    generateTitle: (groupingKey) => groupingKey,
+    type: "document",
   },
-  // GitHub - Handled specially in classifyDomain() based on org list
+  // GitHub - basic/fallback handling for other repos
+  {
+    pattern: /^github\.com$/,
+    extractGroupingKey: () => "GitHub",
+    type: "research",
+  },
+  {
+    pattern: /^claude\.ai$/,
+    extractGroupingKey: (_url, page_title) =>
+      page_title.replace("- Claude", ""),
+    type: "research",
+  },
   // Monday.com - boards and docs
   {
     pattern: /^.*\.monday\.com$/,
-    type: "document",
     extractGroupingKey: (url, pageTitle) => {
       // Filter out root domains
       if (
@@ -394,79 +264,45 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
 
       return pageTitle;
     },
-    generateTitle: (groupingKey) => groupingKey,
+    type: "document",
   },
 ];
 
-function classifyDomain(
+function classifyBrowserData(
   domain: string,
   url: string,
   pageTitle: string,
   githubOrgs: string[]
-): { config: DomainConfig | null; groupingKey: string | null } {
-  // Special handling for GitHub - check org list first
-  if (domain === "github.com") {
-    // Filter out docs.github.com and root domain
-    if (
-      url.includes("docs.github.com") ||
-      url === "https://github.com/" ||
-      url === "https://github.com"
-    ) {
-      return { config: null, groupingKey: null };
-    }
-
-    const match = url.match(/github\.com\/([^/?#]+)(?:\/([^/?#]+))?/);
-    if (!match) return { config: null, groupingKey: null };
-
-    const org = match[1];
-    const repo = match[2];
-
-    // If this org is in our focused work list, aggregate by repository
-    if (githubOrgs.includes(org) && repo) {
-      const repoPath = `${org}/${repo}`;
-      return {
-        config: {
-          pattern: /^github\.com$/,
-          type: "code_repo",
-          extractGroupingKey: () => repoPath,
-          generateTitle: (key) => key,
-        },
-        groupingKey: repoPath,
-      };
-    }
-
-    // Otherwise, aggregate all GitHub activity under generic "GitHub" bucket
-    return {
-      config: {
-        pattern: /^github\.com$/,
-        type: "code_repo",
-        extractGroupingKey: () => "GitHub",
-        generateTitle: () => "GitHub",
-      },
-      groupingKey: "GitHub",
-    };
+): { groupingKey: string; type: "document" | "research" } | null {
+  if (isKnownGitHubRepo(url, githubOrgs)) {
+    // The repository aggregation will handle it.
+    return null;
   }
-
-  // Check other domain configs
-  for (const config of DOMAIN_CONFIGS) {
+  for (const config of documentDomainConfigs) {
     if (config.pattern.test(domain)) {
       const key = config.extractGroupingKey(url, pageTitle);
       if (key) {
-        return { config, groupingKey: key };
+        return { groupingKey: key, type: config.type };
       }
-      // Config matched but groupingKey was null (filtered out) - return early
-      return { config: null, groupingKey: null };
     }
   }
-
-  // No config matched - not a recognized platform
-  return { config: null, groupingKey: null };
+  return null;
 }
 
-export function aggregateBrowserEvents(
+function isKnownGitHubRepo(url: string, githubOrgs: string[]): boolean {
+  const match = url.match(/github\.com\/([^/?#]+)(?:\/([^/?#]+))?/);
+  if (!match) return false;
+
+  const org = match[1];
+  const repo = match[2];
+
+  return githubOrgs.includes(org) && repo !== undefined;
+}
+
+function aggregateBrowserEvents(
   events: StoredEvent[],
   githubOrgs: string[] = []
-): AggregatedBrowserEvent[] {
+): UIEvent[] {
   // Filter only browser_history events
   const browserEvents = events.filter(
     (e) => e.event_type === "browser_history"
@@ -480,19 +316,20 @@ export function aggregateBrowserEvents(
     const browserData = parseBrowserEventData(event);
     if (!browserData) continue;
 
-    const { config, groupingKey } = classifyDomain(
+    const classification = classifyBrowserData(
       browserData.domain,
       browserData.url,
       browserData.page_title || "",
       githubOrgs
     );
 
-    // Skip if no config or groupingKey (not a recognized platform or filtered out)
-    if (!config || !groupingKey) continue;
+    // Skip if no config or groupingKey (not a recognized platform or filtered out), or will be handled in repository aggregates
+    if (!classification) continue;
 
-    // Create aggregation key: groupingKey + domain + date
+    const { groupingKey, type } = classification;
+
     const dateKey = formatDateKey(event.start_date);
-    const key = `${groupingKey}:${browserData.domain}:${dateKey}`;
+    const key = `${type}:${browserData.domain}:${dateKey}:${groupingKey}`;
 
     if (!byKeyDomainAndDay.has(key)) {
       byKeyDomainAndDay.set(key, []);
@@ -501,7 +338,7 @@ export function aggregateBrowserEvents(
   }
 
   // Create aggregated events
-  const aggregated: AggregatedBrowserEvent[] = [];
+  const aggregated: UIEvent[] = [];
 
   for (const [key, visits] of byKeyDomainAndDay.entries()) {
     if (visits.length === 0) continue;
@@ -512,110 +349,61 @@ export function aggregateBrowserEvents(
         new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
     );
 
-    // Extract groupingKey from composite key (groupingKey:domain:date)
+    // Extract groupingKey from composite key (type:domain:date:groupingKey)
     const parts = key.split(":");
-    const groupingKey = parts.slice(0, -2).join(":"); // Handle grouping keys with colons
+    const groupingKey = parts.slice(3).join(":"); // Handle grouping keys with colons
+    const type = parts[0] as "document" | "research";
+
+    console.log(groupingKey, type);
 
     const firstVisit = sorted[0];
-    const browserData = parseBrowserEventData(firstVisit)!;
-    const { config } = classifyDomain(
-      browserData.domain,
-      browserData.url,
-      browserData.page_title || "",
-      githubOrgs
-    );
+    // Find min start and max end times
+    const visitTimes = visits.map((v) => new Date(v.start_date).getTime());
+    const minStart = Math.min(...visitTimes);
+    const maxEnd = Math.max(...visitTimes);
 
-    if (!config) continue; // Should never happen due to earlier filter
+    // Apply buffers
+    const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+    const THIRTY_MINUTES_MS = 30 * 60 * 1000;
 
-    // Create aggregate key for uniqueness
-    const aggregateKey = `${config.type}:${groupingKey}`;
+    // Start buffer: -15 min for collaborative docs, none for others
+    const startBuffer = type === "document" ? FIFTEEN_MINUTES_MS : 0;
+    const adjustedStart = minStart - startBuffer;
 
-    const aggregate = createBrowserAggregateFromGroup(
-      sorted,
-      aggregateKey,
-      config,
-      groupingKey
-    );
-    aggregated.push(aggregate);
+    // End buffer: +15 min (assume work continued)
+    const adjustedEnd = maxEnd + FIFTEEN_MINUTES_MS;
+
+    // Minimum span: 30 minutes for single visits
+    const span = adjustedEnd - adjustedStart;
+    const finalEnd =
+      span < THIRTY_MINUTES_MS
+        ? adjustedStart + THIRTY_MINUTES_MS
+        : adjustedEnd;
+
+    aggregated.push({
+      id: groupingKey,
+      type,
+      title: groupingKey,
+      start_date: new Date(adjustedStart).toISOString(),
+      end_date: new Date(finalEnd).toISOString(),
+      project_id: visits[0].project_id,
+      is_all_day: false,
+      activities: visits,
+      domain: firstVisit.domain,
+    });
   }
 
   return aggregated;
-}
-
-function createBrowserAggregateFromGroup(
-  visits: StoredEvent[],
-  aggregateKey: string,
-  config: DomainConfig,
-  groupingKey: string
-): AggregatedBrowserEvent {
-  const firstBrowserData = parseBrowserEventData(visits[0])!;
-
-  // Find min start and max end times
-  const visitTimes = visits.map((v) => new Date(v.start_date).getTime());
-  const minStart = Math.min(...visitTimes);
-  const maxEnd = Math.max(...visitTimes);
-
-  // Apply buffers
-  const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
-  const THIRTY_MINUTES_MS = 30 * 60 * 1000;
-
-  // Start buffer: -15 min for collaborative docs, none for others
-  const startBuffer = config.type === "document" ? FIFTEEN_MINUTES_MS : 0;
-  const adjustedStart = minStart - startBuffer;
-
-  // End buffer: +15 min (assume work continued)
-  const adjustedEnd = maxEnd + FIFTEEN_MINUTES_MS;
-
-  // Minimum span: 30 minutes for single visits
-  const span = adjustedEnd - adjustedStart;
-  const finalEnd =
-    span < THIRTY_MINUTES_MS ? adjustedStart + THIRTY_MINUTES_MS : adjustedEnd;
-
-  // Generate display title from grouping key
-  const title = config.generateTitle(groupingKey);
-
-  // Extract metadata - groupingKey contains the actual identifier
-  let document_id: string | undefined;
-  let repository: string | undefined;
-  let workspace: string | undefined;
-
-  if (config.type === "document") {
-    document_id = groupingKey;
-  } else if (config.type === "code_repo") {
-    repository = groupingKey;
-  } else if (config.type === "project_tool") {
-    workspace = groupingKey;
-  }
-
-  return {
-    id: `browser-${aggregateKey}-${adjustedStart}`,
-    aggregate_key: aggregateKey,
-    aggregate_type: config.type,
-    domain: firstBrowserData.domain,
-    title,
-    start_date: new Date(adjustedStart).toISOString(),
-    end_date: new Date(finalEnd).toISOString(),
-    visits,
-    project_id: visits[0].project_id,
-    document_id,
-    repository,
-    workspace,
-  };
-}
-
-export function isAggregatedBrowserEvent(
-  event: StoredEvent | AggregatedGitEvent | AggregatedBrowserEvent
-): event is AggregatedBrowserEvent {
-  return "aggregate_key" in event && "visits" in event;
 }
 
 // ============================================================================
 // Repository Event Aggregation Function
 // ============================================================================
 
-export function aggregateRepositoryEvents(
-  events: StoredEvent[]
-): AggregatedRepositoryEvent[] {
+function aggregateRepositoryEvents(events: StoredEvent[]): {
+  aggregated: UIEvent[];
+  discoveredGitOrgs: string[];
+} {
   // Filter events that have repository_path (git OR browser with repo path)
   const repoEvents = events.filter((e) => {
     if (e.event_type === "git") {
@@ -627,6 +415,7 @@ export function aggregateRepositoryEvents(
     }
     return false;
   });
+  const discoveredGitOrgs = new Set<string>();
 
   // Group by repository_path + day
   const byRepoAndDay = new Map<string, StoredEvent[]>();
@@ -642,6 +431,8 @@ export function aggregateRepositoryEvents(
 
     if (!repoPath) continue;
 
+    discoveredGitOrgs.add(repoPath.split("/").shift()!);
+
     const dateKey = formatDateKey(event.start_date);
     const key = `${repoPath}:${dateKey}`;
 
@@ -652,7 +443,7 @@ export function aggregateRepositoryEvents(
   }
 
   // Create aggregates combining git + browser
-  const aggregated: AggregatedRepositoryEvent[] = [];
+  const aggregated: UIEvent[] = [];
 
   for (const [key, allEvents] of byRepoAndDay) {
     const repoPath = key.split(":").slice(0, -1).join(":");
@@ -697,18 +488,20 @@ export function aggregateRepositoryEvents(
 
     aggregated.push({
       id: `repo-${repoPath}-${minStart}`,
-      repository_path: repoPath,
-      repository_name: repoName,
+      type: "repository",
+      title: repoName,
       start_date: new Date(minStart).toISOString(),
       end_date: new Date(maxEnd).toISOString(),
-      git_activities: gitEvents,
-      browser_visits: browserEvents,
       project_id: allEvents[0].project_id,
+      is_all_day: false,
+      activities: [...gitEvents, ...browserEvents],
+      repository_path: repoPath,
+      repository_name: repoName,
       origin_url: originUrl,
     });
   }
 
-  return aggregated;
+  return { aggregated, discoveredGitOrgs: Array.from(discoveredGitOrgs) };
 }
 
 // ============================================================================
@@ -717,7 +510,7 @@ export function aggregateRepositoryEvents(
 
 export interface UIEvent {
   id: string;
-  type: "calendar" | "git" | "browser" | "repository";
+  type: "calendar" | "repository" | "document" | "research";
   title: string;
   start_date: string;
   end_date: string;
@@ -729,8 +522,7 @@ export interface UIEvent {
   // For git/browser/repository: multiple StoredEvents that were aggregated
   activities: StoredEvent[];
 
-  // Browser-specific fields for rendering
-  aggregate_type?: BrowserAggregateType;
+  // Browser-specific data.
   domain?: string;
 
   // Repository-specific fields
@@ -739,7 +531,7 @@ export interface UIEvent {
   origin_url?: string;
 }
 
-function storedEventToUIEvent(event: StoredEvent): UIEvent {
+function calendarStoredEventToUIEvent(event: StoredEvent): UIEvent {
   let is_all_day = false;
   if (event.event_type === "calendar") {
     try {
@@ -762,90 +554,21 @@ function storedEventToUIEvent(event: StoredEvent): UIEvent {
   };
 }
 
-function gitAggregateToUIEvent(aggregate: AggregatedGitEvent): UIEvent {
-  return {
-    id: aggregate.id,
-    type: "git",
-    title:
-      aggregate.repository_name.split("/").pop() || aggregate.repository_name,
-    start_date: aggregate.start_date,
-    end_date: aggregate.end_date,
-    project_id: aggregate.project_id,
-    is_all_day: false,
-    activities: aggregate.activities,
-    repository_name: aggregate.repository_name,
-  };
-}
-
-function browserAggregateToUIEvent(aggregate: AggregatedBrowserEvent): UIEvent {
-  return {
-    id: aggregate.id,
-    type: "browser",
-    title: aggregate.title,
-    start_date: aggregate.start_date,
-    end_date: aggregate.end_date,
-    project_id: aggregate.project_id,
-    is_all_day: false,
-    activities: aggregate.visits,
-    aggregate_type: aggregate.aggregate_type,
-    domain: aggregate.domain,
-  };
-}
-
-function repositoryAggregateToUIEvent(
-  aggregate: AggregatedRepositoryEvent
-): UIEvent {
-  return {
-    id: aggregate.id,
-    type: "repository",
-    title: aggregate.repository_name,
-    start_date: aggregate.start_date,
-    end_date: aggregate.end_date,
-    project_id: aggregate.project_id,
-    is_all_day: false,
-    activities: [...aggregate.git_activities, ...aggregate.browser_visits],
-    repository_path: aggregate.repository_path,
-    repository_name: aggregate.repository_name,
-    origin_url: aggregate.origin_url,
-  };
-}
-
 export function aggregateAllEvents(
   githubOrgs: string[],
   eventsData: StoredEvent[]
 ): UIEvent[] {
-  const repositoryAggregates = aggregateRepositoryEvents(eventsData);
-  const coveredRepoPaths = new Set(
-    repositoryAggregates.map((agg) => agg.repository_path)
-  );
-
-  const gitAggregates = aggregateGitEvents(eventsData).filter((aggregate) => {
-    const hasCoveredRepoPath = aggregate.activities.some((activity) => {
-      const data = JSON.parse(activity.type_specific_data || "{}");
-      return data.repository_path && coveredRepoPaths.has(data.repository_path);
-    });
-    return !hasCoveredRepoPath;
-  });
-
-  const browserAggregates = aggregateBrowserEvents(
-    eventsData,
-    githubOrgs
-  ).filter((aggregate) => {
-    const hasCoveredRepoPath = aggregate.visits.some((visit) => {
-      const data = JSON.parse(visit.type_specific_data || "{}");
-      return data.repository_path && coveredRepoPaths.has(data.repository_path);
-    });
-    return !hasCoveredRepoPath;
-  });
-
-  const calendarEvents = eventsData.filter((e) => e.event_type === "calendar");
-
-  return [
-    ...repositoryAggregates.map(repositoryAggregateToUIEvent),
-    ...gitAggregates.map(gitAggregateToUIEvent),
-    ...browserAggregates.map(browserAggregateToUIEvent),
-    ...calendarEvents.map(storedEventToUIEvent),
-  ];
+  const { aggregated: repositoryEvents, discoveredGitOrgs } =
+    aggregateRepositoryEvents(eventsData);
+  // "document" and "research"-type events
+  const browserEvents = aggregateBrowserEvents(eventsData, [
+    ...githubOrgs,
+    ...discoveredGitOrgs,
+  ]);
+  const calendarEvents = eventsData
+    .filter((e) => e.event_type === "calendar")
+    .map(calendarStoredEventToUIEvent);
+  return [...calendarEvents, ...repositoryEvents, ...browserEvents];
 }
 
 export function filterUIEventsByDay(
