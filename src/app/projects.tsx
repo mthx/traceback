@@ -24,9 +24,7 @@ import type {
   StoredEvent,
   Project,
   ProjectRule,
-  AggregatedGitEvent,
-  AggregatedBrowserEvent,
-  AggregatedRepositoryEvent,
+  UIEvent,
 } from "../types/event";
 import type { DateRange } from "../components/date-range-filter";
 import { RuleEditDialog } from "../components/rule-edit-dialog";
@@ -245,13 +243,7 @@ export function Projects({
     }
   }
 
-  const handleEventAssign = (
-    event:
-      | StoredEvent
-      | AggregatedGitEvent
-      | AggregatedBrowserEvent
-      | AggregatedRepositoryEvent
-  ) => {
+  const handleEventAssign = (event: UIEvent) => {
     openEventDialog(event, fetchProjectDetails);
   };
 

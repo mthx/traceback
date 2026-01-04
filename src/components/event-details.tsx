@@ -1,29 +1,10 @@
-import type {
-  StoredEvent,
-  CalendarEventData,
-  GitEventData,
-  AggregatedGitEvent,
-  AggregatedBrowserEvent,
-  AggregatedRepositoryEvent,
-  BrowserHistoryEventData,
-} from "@/types/event";
-import {
-  parseEventData,
-  parseGitEventData,
-  parseBrowserEventData,
-  isAggregatedGitEvent,
-  isAggregatedBrowserEvent,
-  isAggregatedRepositoryEvent,
-} from "@/types/event";
+import type { StoredEvent, CalendarEventData, UIEvent } from "@/types/event";
+import { parseEventData, parseBrowserEventData } from "@/types/event";
 import type { ReactNode } from "react";
 import { formatEventTime } from "@/components/calendar-utils";
 
 interface EventDetailsProps {
-  event:
-    | StoredEvent
-    | AggregatedGitEvent
-    | AggregatedBrowserEvent
-    | AggregatedRepositoryEvent;
+  event: UIEvent;
 }
 
 // Abbreviate GitHub URLs with conventional formatting
@@ -63,26 +44,19 @@ export function DetailsSection({
 }
 
 export function EventDetails({ event }: EventDetailsProps) {
-  if (isAggregatedRepositoryEvent(event)) {
-    return <RepositoryAggregateEventDetails event={event} />;
+  if (event.type === "repository") {
+    return <RepositoryEventDetails event={event} />;
   }
-  if (isAggregatedGitEvent(event)) {
-    return <GitAggregateEventDetails event={event} />;
+  if (event.type === "git") {
+    return <GitEventDetails event={event} />;
   }
-  if (isAggregatedBrowserEvent(event)) {
-    return <BrowserAggregateEventDetails event={event} />;
+  if (event.type === "browser") {
+    return <BrowserEventDetails event={event} />;
   }
-  // Now TypeScript knows it must be StoredEvent
-  if (event.event_type === "calendar") {
-    const eventData = parseEventData(event);
-    return <CalendarEventDetails event={event} eventData={eventData} />;
-  } else if (event.event_type === "git") {
-    const gitData = parseGitEventData(event);
-    return <GitEventDetails event={event} gitData={gitData} />;
-  } else if (event.event_type === "browser_history") {
-    const browserData = parseBrowserEventData(event);
+  if (event.type === "calendar") {
+    const eventData = parseEventData(event.activities[0]);
     return (
-      <BrowserHistoryEventDetails event={event} browserData={browserData} />
+      <CalendarEventDetails event={event.activities[0]} eventData={eventData} />
     );
   }
   return null;
@@ -125,60 +99,56 @@ function CalendarEventDetails({ eventData }: CalendarEventDetailsProps) {
 }
 
 interface GitEventDetailsProps {
-  event: StoredEvent;
-  gitData: GitEventData | null;
+  event: UIEvent;
 }
 
-function GitEventDetails({ gitData }: GitEventDetailsProps) {
+function GitEventDetails({ event }: GitEventDetailsProps) {
   return (
     <div className="space-y-4">
-      {gitData?.activity_type && (
-        <DetailsSection title="Details">
-          {gitData?.activity_type && (
-            <div>
-              <span className="font-medium">Activity:</span>{" "}
-              <span className="capitalize">{gitData.activity_type}</span>
+      <DetailsSection title="Activities">
+        <div className="space-y-2">
+          {event.activities.map((activity) => (
+            <div key={activity.id} className="text-sm">
+              <span className="font-medium">
+                {formatEventTime(activity.start_date)}
+              </span>
+              <span className="ml-2">{activity.title}</span>
             </div>
-          )}
-        </DetailsSection>
-      )}
+          ))}
+        </div>
+      </DetailsSection>
     </div>
   );
 }
 
-interface RepositoryAggregateEventDetailsProps {
-  event: AggregatedRepositoryEvent;
+interface RepositoryEventDetailsProps {
+  event: UIEvent;
 }
 
-function RepositoryAggregateEventDetails({
-  event,
-}: RepositoryAggregateEventDetailsProps) {
-  // Combine git activities and browser visits into a single timeline
+function RepositoryEventDetails({ event }: RepositoryEventDetailsProps) {
+  // Combine git and browser activities into a single timeline
   type TimelineItem = {
     type: "git" | "browser";
     timestamp: string;
-    event: StoredEvent;
+    activity: StoredEvent;
   };
 
-  const timeline: TimelineItem[] = [
-    ...event.git_activities.map((activity) => ({
-      type: "git" as const,
+  const timeline: TimelineItem[] = event.activities.map((activity) => {
+    // Determine type based on event_type field
+    const isGit = activity.event_type === "git";
+    return {
+      type: isGit ? ("git" as const) : ("browser" as const),
       timestamp: activity.start_date,
-      event: activity,
-    })),
-    ...event.browser_visits.map((visit) => ({
-      type: "browser" as const,
-      timestamp: visit.start_date,
-      event: visit,
-    })),
-  ];
+      activity,
+    };
+  });
 
-  // Sort by timestamp (newest first or chronological order)
+  // Sort by timestamp (chronological order)
   timeline.sort(
     (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   );
 
-  const totalCount = event.git_activities.length + event.browser_visits.length;
+  const totalCount = event.activities.length;
 
   return (
     <div className="space-y-4">
@@ -189,30 +159,30 @@ function RepositoryAggregateEventDetails({
               if (item.type === "git") {
                 return (
                   <div
-                    key={`git-${item.event.id}-${idx}`}
+                    key={`git-${item.activity.id}-${idx}`}
                     className="text-sm border-l-2 border-blue-500 pl-2"
                   >
                     <div className="font-medium">
-                      {formatEventTime(item.event.start_date)}
+                      {formatEventTime(item.activity.start_date)}
                     </div>
                     <div className="text-muted-foreground">
-                      {item.event.title}
+                      {item.activity.title}
                     </div>
                   </div>
                 );
               } else {
-                const browserData = parseBrowserEventData(item.event);
+                const browserData = parseBrowserEventData(item.activity);
                 const displayUrl = browserData?.url
                   ? abbreviateGitHubUrl(browserData.url)
                   : "";
 
                 return (
                   <div
-                    key={`browser-${item.event.id}-${idx}`}
+                    key={`browser-${item.activity.id}-${idx}`}
                     className="text-sm border-l-2 border-green-500 pl-2"
                   >
                     <div className="font-medium">
-                      {formatEventTime(item.event.start_date)}
+                      {formatEventTime(item.activity.start_date)}
                     </div>
                     {browserData?.page_title && (
                       <div className="text-muted-foreground truncate">
@@ -238,43 +208,18 @@ function RepositoryAggregateEventDetails({
   );
 }
 
-interface GitAggregateEventDetailsProps {
-  event: AggregatedGitEvent;
+interface BrowserEventDetailsProps {
+  event: UIEvent;
 }
 
-function GitAggregateEventDetails({ event }: GitAggregateEventDetailsProps) {
-  return (
-    <div className="space-y-4">
-      <DetailsSection title="Activities">
-        <div className="space-y-2">
-          {event.activities.map((activity) => (
-            <div key={activity.id} className="text-sm">
-              <span className="font-medium">
-                {formatEventTime(activity.start_date)}
-              </span>
-              <span className="ml-2">{activity.title}</span>
-            </div>
-          ))}
-        </div>
-      </DetailsSection>
-    </div>
-  );
-}
-
-interface BrowserAggregateEventDetailsProps {
-  event: AggregatedBrowserEvent;
-}
-
-function BrowserAggregateEventDetails({
-  event,
-}: BrowserAggregateEventDetailsProps) {
-  const isCollaborativeDoc = event.aggregate_type === "collaborative_doc";
+function BrowserEventDetails({ event }: BrowserEventDetailsProps) {
+  const isCollaborativeDoc = event.aggregate_type === "document";
 
   return (
     <div className="space-y-4">
       <DetailsSection title="Visits">
         <div className="space-y-2 max-h-48 overflow-y-auto">
-          {event.visits.map((visit, idx) => {
+          {event.activities.map((visit, idx) => {
             const browserData = parseBrowserEventData(visit);
             const displayUrl = browserData?.url
               ? abbreviateGitHubUrl(browserData.url)
@@ -321,46 +266,6 @@ function BrowserAggregateEventDetails({
           })}
         </div>
       </DetailsSection>
-    </div>
-  );
-}
-
-interface BrowserHistoryEventDetailsProps {
-  event: StoredEvent;
-  browserData: BrowserHistoryEventData | null;
-}
-
-function BrowserHistoryEventDetails({
-  browserData,
-}: BrowserHistoryEventDetailsProps) {
-  const displayUrl = browserData?.url
-    ? abbreviateGitHubUrl(browserData.url)
-    : "";
-
-  return (
-    <div className="space-y-4">
-      {browserData && (
-        <>
-          <DetailsSection title="URL">
-            <a
-              href={browserData.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline break-all"
-            >
-              {displayUrl}
-            </a>
-          </DetailsSection>
-
-          <DetailsSection title="Domain">{browserData.domain}</DetailsSection>
-
-          {browserData.visit_count > 1 && (
-            <DetailsSection title="Visit Count">
-              {browserData.visit_count} visits
-            </DetailsSection>
-          )}
-        </>
-      )}
     </div>
   );
 }

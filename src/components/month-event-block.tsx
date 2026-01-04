@@ -1,32 +1,14 @@
-import type {
-  StoredEvent,
-  Project,
-  AggregatedGitEvent,
-  AggregatedBrowserEvent,
-  AggregatedRepositoryEvent,
-} from "@/types/event";
+import type { Project, UIEvent } from "@/types/event";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  CalendarEventTooltipContent,
-  GitAggregateTooltipContent,
-  BrowserAggregateTooltipContent,
-  RepositoryAggregateTooltipContent,
-} from "@/components/event-tooltip-content";
-import {
-  getEventColor,
-  getEventBlockStyle,
-  formatEventTime,
-} from "./calendar-utils";
+import { CalendarEventTooltipContent } from "@/components/event-tooltip-content";
+import { getEventBlockStyle, formatEventTime } from "./calendar-utils";
 
 interface MonthEventBlockProps {
-  event?: StoredEvent;
-  gitAggregate?: AggregatedGitEvent;
-  browserAggregate?: AggregatedBrowserEvent;
-  repositoryAggregate?: AggregatedRepositoryEvent;
+  event: UIEvent;
   projectMap?: Map<number, Project>;
   onClick: () => void;
   onAssignmentComplete?: () => void;
@@ -34,172 +16,53 @@ interface MonthEventBlockProps {
 
 export function MonthEventBlock({
   event,
-  gitAggregate,
-  browserAggregate,
-  repositoryAggregate,
   projectMap,
   onClick,
   onAssignmentComplete,
 }: MonthEventBlockProps) {
-  if (repositoryAggregate) {
-    // Repository aggregate (unified git + browser)
-    const eventColor = getEventColor(repositoryAggregate, projectMap);
-    const style = getEventBlockStyle(eventColor);
+  const project =
+    event.project_id && projectMap ? projectMap.get(event.project_id) : null;
+  const eventColor = project?.color || "#94a3b8";
+  const style = getEventBlockStyle(eventColor);
 
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div
-            className="text-[10px] leading-tight rounded px-1 py-0.5 truncate mb-0.5"
-            style={{
-              ...style,
-              borderLeft: `2px solid ${eventColor}`,
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onClick();
-            }}
-          >
-            <span className="font-medium">
-              {formatEventTime(repositoryAggregate.start_date)}
-            </span>{" "}
-            {repositoryAggregate.repository_name}
-          </div>
-        </TooltipTrigger>
-        <TooltipContent
-          side="right"
-          align="start"
-          sideOffset={8}
-          className="max-w-md max-h-96 overflow-y-auto"
-        >
-          <RepositoryAggregateTooltipContent
-            aggregate={repositoryAggregate}
-            onAssignmentComplete={onAssignmentComplete}
-          />
-        </TooltipContent>
-      </Tooltip>
-    );
+  let displayTitle = event.title;
+  if (event.type === "repository") {
+    displayTitle = event.repository_name || event.title;
+  } else if (event.type === "git") {
+    displayTitle = event.repository_name?.split("/").pop() || event.title;
   }
 
-  if (browserAggregate) {
-    // Browser aggregate
-    const eventColor = getEventColor(browserAggregate, projectMap);
-    const style = getEventBlockStyle(eventColor);
-
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div
-            className="text-[10px] leading-tight rounded px-1 py-0.5 truncate mb-0.5"
-            style={{
-              ...style,
-              borderLeft: `2px solid ${eventColor}`,
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onClick();
-            }}
-          >
-            <span className="font-medium">
-              {formatEventTime(browserAggregate.start_date)}
-            </span>{" "}
-            {browserAggregate.title}
-          </div>
-        </TooltipTrigger>
-        <TooltipContent
-          side="right"
-          align="start"
-          sideOffset={8}
-          className="max-w-md max-h-96 overflow-y-auto"
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className="text-[10px] leading-tight rounded px-1 py-0.5 truncate mb-0.5"
+          style={{
+            ...style,
+            borderLeft: `2px solid ${eventColor}`,
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
         >
-          <BrowserAggregateTooltipContent
-            aggregate={browserAggregate}
-            onAssignmentComplete={onAssignmentComplete}
-          />
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  if (gitAggregate) {
-    // Git aggregate event
-    const eventColor = getEventColor(gitAggregate, projectMap);
-    const style = getEventBlockStyle(eventColor);
-
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div
-            className="text-[10px] leading-tight rounded px-1 py-0.5 truncate mb-0.5"
-            style={{
-              ...style,
-              borderLeft: `2px solid ${eventColor}`,
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onClick();
-            }}
-          >
-            <span className="font-medium">
-              {formatEventTime(gitAggregate.start_date)}
-            </span>{" "}
-            {gitAggregate.repository_name.split("/").pop()}
-          </div>
-        </TooltipTrigger>
-        <TooltipContent
-          side="right"
-          align="start"
-          sideOffset={8}
-          className="max-w-md max-h-96 overflow-y-auto"
-        >
-          <GitAggregateTooltipContent
-            aggregate={gitAggregate}
-            onAssignmentComplete={onAssignmentComplete}
-          />
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  if (event) {
-    // Calendar event
-    const eventColor = getEventColor(event, projectMap);
-    const style = getEventBlockStyle(eventColor);
-
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div
-            className="text-[10px] leading-tight rounded px-1 py-0.5 truncate mb-0.5"
-            style={{
-              ...style,
-              borderLeft: `2px solid ${eventColor}`,
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              onClick();
-            }}
-          >
-            <span className="font-medium">
-              {formatEventTime(event.start_date)}
-            </span>{" "}
-            {event.title}
-          </div>
-        </TooltipTrigger>
-        <TooltipContent
-          side="right"
-          align="start"
-          sideOffset={8}
-          className="max-w-md max-h-96 overflow-y-auto"
-        >
-          <CalendarEventTooltipContent
-            event={event}
-            onAssignmentComplete={onAssignmentComplete}
-          />
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  return null;
+          <span className="font-medium">
+            {formatEventTime(event.start_date)}
+          </span>{" "}
+          {displayTitle}
+        </div>
+      </TooltipTrigger>
+      <TooltipContent
+        side="right"
+        align="start"
+        sideOffset={8}
+        className="max-w-md max-h-96 overflow-y-auto"
+      >
+        <CalendarEventTooltipContent
+          event={event}
+          onAssignmentComplete={onAssignmentComplete}
+        />
+      </TooltipContent>
+    </Tooltip>
+  );
 }

@@ -87,7 +87,26 @@ export function EventsList({
   }, [fetchEvents, fetchProjects]);
 
   function handleEventClick(event: StoredEvent) {
-    openEventDialog(event, () => {
+    // Convert StoredEvent to UIEvent for the dialog
+    const eventData =
+      event.event_type === "calendar" ? parseEventData(event) : null;
+    const uiEvent = {
+      id: String(event.id),
+      type:
+        event.event_type === "git"
+          ? ("git" as const)
+          : event.event_type === "browser_history"
+            ? ("browser" as const)
+            : ("calendar" as const),
+      title: event.title,
+      start_date: event.start_date,
+      end_date: event.end_date,
+      project_id: event.project_id,
+      is_all_day: eventData?.is_all_day || false,
+      activities: [event],
+    };
+
+    openEventDialog(uiEvent, () => {
       fetchEvents();
       onEventAssign?.();
     });

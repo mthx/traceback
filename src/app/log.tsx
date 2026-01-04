@@ -1,47 +1,28 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { formatDateLong, formatEventTime } from "@/components/calendar-utils";
+import {
+  EventContent,
+  EventHeader,
+  getEventIcon,
+} from "@/components/event-content";
 import { Button } from "@/components/ui/button";
-import { useSyncComplete } from "@/hooks/sync-hooks";
-import { usePersistedState } from "@/hooks/use-persisted-state";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useSyncComplete } from "@/hooks/sync-hooks";
+import { usePersistedState } from "@/hooks/use-persisted-state";
+import type { Project, StoredEvent, UIEvent } from "@/types/event";
+import { aggregateAllEvents } from "@/types/event";
+import { invoke } from "@tauri-apps/api/core";
 import { CalendarIcon } from "lucide-react";
-import type {
-  StoredEvent,
-  Project,
-  AggregatedGitEvent,
-  AggregatedBrowserEvent,
-  AggregatedRepositoryEvent,
-} from "@/types/event";
-import {
-  aggregateGitEvents,
-  aggregateBrowserEvents,
-  aggregateRepositoryEvents,
-  isAggregatedGitEvent,
-  isAggregatedBrowserEvent,
-  isAggregatedRepositoryEvent,
-} from "@/types/event";
-import {
-  EventHeader,
-  EventContent,
-  getEventIcon,
-} from "@/components/event-content";
-import { formatDateLong, formatEventTime } from "@/components/calendar-utils";
-
-type AggregatedEvent =
-  | AggregatedRepositoryEvent
-  | AggregatedGitEvent
-  | AggregatedBrowserEvent
-  | StoredEvent;
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface DayGroup {
   date: Date;
   dateKey: string;
-  events: AggregatedEvent[];
+  events: UIEvent[];
 }
 
 async function getGitHubOrgs(): Promise<string[]> {
@@ -57,13 +38,13 @@ function formatDateKey(date: Date): string {
   return date.toISOString().split("T")[0];
 }
 
-function getEventDateKey(event: AggregatedEvent): string {
+function getEventDateKey(event: UIEvent): string {
   const date = new Date(event.start_date);
   return formatDateKey(date);
 }
 
-function groupEventsByDay(events: AggregatedEvent[]): DayGroup[] {
-  const dayMap = new Map<string, AggregatedEvent[]>();
+function groupEventsByDay(events: UIEvent[]): DayGroup[] {
+  const dayMap = new Map<string, UIEvent[]>();
 
   for (const event of events) {
     const dateKey = getEventDateKey(event);
@@ -94,7 +75,7 @@ function DetailPanel({
   focusedEvent,
   onAssignmentComplete,
 }: {
-  focusedEvent: AggregatedEvent | null;
+  focusedEvent: UIEvent | null;
   onAssignmentComplete: () => void;
 }) {
   return (
@@ -124,10 +105,8 @@ export function Log() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [oldestDate, setOldestDate] = useState<Date | null>(null);
-  const [focusedEvent, setFocusedEvent] = useState<AggregatedEvent | null>(
-    null
-  );
+  const [oldestDate, setOldestDate] = useState<Date | undefined>(undefined);
+  const [focusedEvent, setFocusedEvent] = useState<UIEvent | null>(null);
   const [persistedFocusedEventId, setPersistedFocusedEventId] =
     usePersistedState<string | null>("logFocusedEventId", null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -141,9 +120,9 @@ export function Log() {
   }, []);
 
   const getEventById = useCallback(
-    (id: string): AggregatedEvent | undefined => {
+    (id: string): UIEvent | undefined => {
       for (const group of dayGroups) {
-        const event = group.events.find((e) => getEventId(e) === id);
+        const event = group.events.find((e) => e.id === id);
         if (event) return event;
       }
       return undefined;
@@ -162,8 +141,8 @@ export function Log() {
       focusedEventIdRef.current = eventId || null;
 
       // Only update state if the ID actually changed to avoid unnecessary re-renders
-      const currentId = focusedEvent ? getEventId(focusedEvent) : null;
-      const newId = newFocusedEvent ? getEventId(newFocusedEvent) : null;
+      const currentId = focusedEvent ? focusedEvent.id : null;
+      const newId = newFocusedEvent ? newFocusedEvent.id : null;
 
       if (currentId !== newId) {
         setFocusedEvent(newFocusedEvent);
@@ -174,10 +153,6 @@ export function Log() {
     document.addEventListener("focusin", handleFocusChange);
     return () => document.removeEventListener("focusin", handleFocusChange);
   }, [getEventById, focusedEvent, setPersistedFocusedEventId]);
-
-  useSyncComplete(() => {
-    refreshData();
-  });
 
   useEffect(() => {
     if (dayGroups.length > 0 && !focusedEvent) {
@@ -198,9 +173,8 @@ export function Log() {
       // Fall back to focusing the first event
       const firstEvent = dayGroups[0]?.events[0];
       if (firstEvent) {
-        const eventId = getEventId(firstEvent);
         const element = document.querySelector(
-          `[data-event-id="${eventId}"]`
+          `[data-event-id="${firstEvent.id}"]`
         ) as HTMLElement;
         if (element) {
           element.focus();
@@ -222,9 +196,7 @@ export function Log() {
         return;
       if (dayGroups.length === 0) return;
 
-      const allEvents: AggregatedEvent[] = dayGroups.flatMap(
-        (group) => group.events
-      );
+      const allEvents: UIEvent[] = dayGroups.flatMap((group) => group.events);
 
       if (allEvents.length === 0) return;
 
@@ -236,12 +208,12 @@ export function Log() {
         if (!currentEventId) return;
 
         const currentIndex = allEvents.findIndex(
-          (event) => getEventId(event) === currentEventId
+          (event) => event.id === currentEventId
         );
 
         if (currentIndex === -1) return;
 
-        let targetEvent: AggregatedEvent | null = null;
+        let targetEvent: UIEvent | null = null;
         if (e.key === "ArrowDown" && currentIndex < allEvents.length - 1) {
           targetEvent = allEvents[currentIndex + 1];
         } else if (e.key === "ArrowUp" && currentIndex > 0) {
@@ -249,8 +221,7 @@ export function Log() {
         }
 
         if (targetEvent) {
-          const targetId = getEventId(targetEvent);
-          const element = eventRefs.current.get(targetId);
+          const element = eventRefs.current.get(targetEvent.id);
           element?.focus();
         }
       } else {
@@ -272,12 +243,11 @@ export function Log() {
         requestAnimationFrame(() => {
           const targetY = containerRect.top + relativeY;
 
-          let closestEvent: AggregatedEvent | null = null;
+          let closestEvent: UIEvent | null = null;
           let closestDistance = Infinity;
 
           for (const event of allEvents) {
-            const eventId = getEventId(event);
-            const element = eventRefs.current.get(eventId);
+            const element = eventRefs.current.get(event.id);
             if (!element) continue;
 
             const rect = element.getBoundingClientRect();
@@ -291,8 +261,7 @@ export function Log() {
           }
 
           if (closestEvent) {
-            const targetId = getEventId(closestEvent);
-            const element = eventRefs.current.get(targetId);
+            const element = eventRefs.current.get(closestEvent.id);
             element?.focus();
           }
         });
@@ -303,12 +272,13 @@ export function Log() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [dayGroups]);
 
-  async function fetchInitialData() {
-    setLoading(true);
+  async function refreshData(startDate?: Date) {
     try {
       const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - DAYS_PER_PAGE);
+      if (!startDate) {
+        startDate = new Date(endDate);
+        startDate.setDate(startDate.getDate() - DAYS_PER_PAGE);
+      }
 
       const [eventsData, projectsData, githubOrgs] = await Promise.all([
         invoke<StoredEvent[]>("get_stored_events", {
@@ -321,52 +291,21 @@ export function Log() {
 
       const projectMap = new Map(projectsData.map((p) => [p.id, p]));
       setProjects(projectMap);
-      setOldestDate(startDate);
 
-      const repositoryAggregates = aggregateRepositoryEvents(eventsData);
-      const coveredRepoPaths = new Set(
-        repositoryAggregates.map((agg) => agg.repository_path)
-      );
-
-      const gitAggregates = aggregateGitEvents(eventsData).filter(
-        (aggregate) => {
-          const hasCoveredRepoPath = aggregate.activities.some((activity) => {
-            const data = JSON.parse(activity.type_specific_data || "{}");
-            return (
-              data.repository_path && coveredRepoPaths.has(data.repository_path)
-            );
-          });
-          return !hasCoveredRepoPath;
-        }
-      );
-
-      const browserAggregates = aggregateBrowserEvents(
-        eventsData,
-        githubOrgs
-      ).filter((aggregate) => {
-        const hasCoveredRepoPath = aggregate.visits.some((visit) => {
-          const data = JSON.parse(visit.type_specific_data || "{}");
-          return (
-            data.repository_path && coveredRepoPaths.has(data.repository_path)
-          );
-        });
-        return !hasCoveredRepoPath;
-      });
-
-      const calendarEvents = eventsData.filter(
-        (e) => e.event_type === "calendar"
-      );
-
-      const combined: AggregatedEvent[] = [
-        ...repositoryAggregates,
-        ...gitAggregates,
-        ...browserAggregates,
-        ...calendarEvents,
-      ];
-
+      const combined = aggregateAllEvents(githubOrgs, eventsData);
       const grouped = groupEventsByDay(combined);
       setDayGroups(grouped);
       setHasMore(eventsData.length > 0);
+      setOldestDate(startDate);
+    } catch (err) {
+      console.error("Error refreshing events:", err);
+    }
+  }
+
+  async function fetchInitialData() {
+    setLoading(true);
+    try {
+      await refreshData();
     } catch (err) {
       console.error("Error fetching events:", err);
     } finally {
@@ -374,138 +313,19 @@ export function Log() {
     }
   }
 
-  async function refreshData() {
-    try {
-      const endDate = new Date();
-      const startDate = oldestDate || new Date();
-
-      const [eventsData, projectsData, githubOrgs] = await Promise.all([
-        invoke<StoredEvent[]>("get_stored_events", {
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
-        }),
-        invoke<Project[]>("get_all_projects"),
-        getGitHubOrgs(),
-      ]);
-
-      const projectMap = new Map(projectsData.map((p) => [p.id, p]));
-      setProjects(projectMap);
-
-      const repositoryAggregates = aggregateRepositoryEvents(eventsData);
-      const coveredRepoPaths = new Set(
-        repositoryAggregates.map((agg) => agg.repository_path)
-      );
-
-      const gitAggregates = aggregateGitEvents(eventsData).filter(
-        (aggregate) => {
-          const hasCoveredRepoPath = aggregate.activities.some((activity) => {
-            const data = JSON.parse(activity.type_specific_data || "{}");
-            return (
-              data.repository_path && coveredRepoPaths.has(data.repository_path)
-            );
-          });
-          return !hasCoveredRepoPath;
-        }
-      );
-
-      const browserAggregates = aggregateBrowserEvents(
-        eventsData,
-        githubOrgs
-      ).filter((aggregate) => {
-        const hasCoveredRepoPath = aggregate.visits.some((visit) => {
-          const data = JSON.parse(visit.type_specific_data || "{}");
-          return (
-            data.repository_path && coveredRepoPaths.has(data.repository_path)
-          );
-        });
-        return !hasCoveredRepoPath;
-      });
-
-      const calendarEvents = eventsData.filter(
-        (e) => e.event_type === "calendar"
-      );
-
-      const combined: AggregatedEvent[] = [
-        ...repositoryAggregates,
-        ...gitAggregates,
-        ...browserAggregates,
-        ...calendarEvents,
-      ];
-
-      const grouped = groupEventsByDay(combined);
-      setDayGroups(grouped);
-    } catch (err) {
-      console.error("Error refreshing events:", err);
-    }
-  }
+  useSyncComplete(() => {
+    refreshData(oldestDate);
+  });
 
   async function loadMoreEvents() {
     if (!hasMore || loadingMore || !oldestDate) return;
 
     setLoadingMore(true);
     try {
-      const endDate = new Date(oldestDate);
+      // This could be made more efficient by just loading the new data.
       const startDate = new Date(oldestDate);
       startDate.setDate(startDate.getDate() - DAYS_PER_PAGE);
-
-      const [eventsData, githubOrgs] = await Promise.all([
-        invoke<StoredEvent[]>("get_stored_events", {
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
-        }),
-        getGitHubOrgs(),
-      ]);
-
-      if (eventsData.length === 0) {
-        setHasMore(false);
-        return;
-      }
-
-      setOldestDate(startDate);
-
-      const repositoryAggregates = aggregateRepositoryEvents(eventsData);
-      const coveredRepoPaths = new Set(
-        repositoryAggregates.map((agg) => agg.repository_path)
-      );
-
-      const gitAggregates = aggregateGitEvents(eventsData).filter(
-        (aggregate) => {
-          const hasCoveredRepoPath = aggregate.activities.some((activity) => {
-            const data = JSON.parse(activity.type_specific_data || "{}");
-            return (
-              data.repository_path && coveredRepoPaths.has(data.repository_path)
-            );
-          });
-          return !hasCoveredRepoPath;
-        }
-      );
-
-      const browserAggregates = aggregateBrowserEvents(
-        eventsData,
-        githubOrgs
-      ).filter((aggregate) => {
-        const hasCoveredRepoPath = aggregate.visits.some((visit) => {
-          const data = JSON.parse(visit.type_specific_data || "{}");
-          return (
-            data.repository_path && coveredRepoPaths.has(data.repository_path)
-          );
-        });
-        return !hasCoveredRepoPath;
-      });
-
-      const calendarEvents = eventsData.filter(
-        (e) => e.event_type === "calendar"
-      );
-
-      const newEvents: AggregatedEvent[] = [
-        ...repositoryAggregates,
-        ...gitAggregates,
-        ...browserAggregates,
-        ...calendarEvents,
-      ];
-
-      const newGrouped = groupEventsByDay(newEvents);
-      setDayGroups((prev) => [...prev, ...newGrouped]);
+      await refreshData(startDate);
     } catch (err) {
       console.error("Error loading more events:", err);
     } finally {
@@ -543,54 +363,6 @@ export function Log() {
     const today = new Date();
     scrollToDate(today);
   };
-
-  function getEventProject(event: AggregatedEvent): Project | undefined {
-    if (isAggregatedRepositoryEvent(event)) {
-      return event.project_id ? projects.get(event.project_id) : undefined;
-    } else if (isAggregatedGitEvent(event)) {
-      return event.project_id ? projects.get(event.project_id) : undefined;
-    } else if (isAggregatedBrowserEvent(event)) {
-      return event.project_id ? projects.get(event.project_id) : undefined;
-    } else {
-      return event.project_id ? projects.get(event.project_id) : undefined;
-    }
-  }
-
-  function getEventTitle(event: AggregatedEvent): string {
-    if (isAggregatedRepositoryEvent(event)) {
-      return event.repository_name;
-    } else if (isAggregatedGitEvent(event)) {
-      return event.repository_name.split("/").pop() || event.repository_name;
-    } else if (isAggregatedBrowserEvent(event)) {
-      return event.title;
-    } else {
-      return event.title;
-    }
-  }
-
-  function getEventType(event: AggregatedEvent): string {
-    if (isAggregatedRepositoryEvent(event)) {
-      return "git";
-    } else if (isAggregatedGitEvent(event)) {
-      return "git";
-    } else if (isAggregatedBrowserEvent(event)) {
-      return "browser_history";
-    } else {
-      return event.event_type;
-    }
-  }
-
-  function getEventId(event: AggregatedEvent): string {
-    if (
-      isAggregatedRepositoryEvent(event) ||
-      isAggregatedGitEvent(event) ||
-      isAggregatedBrowserEvent(event)
-    ) {
-      return event.id;
-    } else {
-      return `event-${event.id}`;
-    }
-  }
 
   return (
     <div className="flex h-full">
@@ -650,41 +422,39 @@ export function Log() {
                   </div>
                   <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
                     {group.events.map((event) => {
-                      const project = getEventProject(event);
-                      const title = getEventTitle(event);
-                      const eventType = getEventType(event);
+                      const project = event.project_id
+                        ? projects.get(event.project_id)
+                        : undefined;
+                      const title = event.title;
 
-                      let aggregateType: string | undefined;
-                      let domain: string | undefined;
-
-                      if (
-                        !isAggregatedRepositoryEvent(event) &&
-                        isAggregatedBrowserEvent(event)
-                      ) {
-                        aggregateType = event.aggregate_type;
-                        domain = event.domain;
-                      }
+                      // Determine event type for icon
+                      let eventType =
+                        event.type === "repository" || event.type === "git"
+                          ? "git"
+                          : event.type === "browser"
+                            ? "browser_history"
+                            : "calendar";
+                      const aggregateType = event.aggregate_type;
+                      const domain = event.domain;
 
                       const Icon = getEventIcon(
                         eventType,
-                        aggregateType as any,
+                        aggregateType,
                         domain
                       );
 
                       const isSelected =
-                        focusedEvent &&
-                        getEventId(focusedEvent) === getEventId(event);
+                        focusedEvent && focusedEvent.id === event.id;
 
                       return (
                         <button
-                          key={getEventId(event)}
-                          data-event-id={getEventId(event)}
+                          key={event.id}
+                          data-event-id={event.id}
                           ref={(el) => {
-                            const eventId = getEventId(event);
                             if (el) {
-                              eventRefs.current.set(eventId, el);
+                              eventRefs.current.set(event.id, el);
                             } else {
-                              eventRefs.current.delete(eventId);
+                              eventRefs.current.delete(event.id);
                             }
                           }}
                           onClick={(e) => {

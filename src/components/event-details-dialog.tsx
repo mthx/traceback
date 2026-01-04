@@ -5,22 +5,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type {
-  AggregatedGitEvent,
-  AggregatedBrowserEvent,
-  AggregatedRepositoryEvent,
-  StoredEvent,
-} from "@/types/event";
+import type { UIEvent } from "@/types/event";
 
 interface EventDetailsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  event:
-    | StoredEvent
-    | AggregatedGitEvent
-    | AggregatedBrowserEvent
-    | AggregatedRepositoryEvent
-    | null;
+  event: UIEvent | null;
   onAssignmentComplete: () => void;
 }
 

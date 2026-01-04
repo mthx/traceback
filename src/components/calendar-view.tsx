@@ -15,18 +15,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import type {
-  StoredEvent,
-  Project,
-  AggregatedGitEvent,
-  AggregatedBrowserEvent,
-  AggregatedRepositoryEvent,
-} from "@/types/event";
-import {
-  aggregateGitEvents,
-  aggregateBrowserEvents,
-  aggregateRepositoryEvents,
-} from "@/types/event";
+import type { StoredEvent, Project, UIEvent } from "@/types/event";
+import { aggregateAllEvents, filterUIEventsByDay } from "@/types/event";
 import {
   Tooltip,
   TooltipProvider,
@@ -81,13 +71,7 @@ interface CalendarViewContextValue {
   events: StoredEvent[];
   projectMap?: Map<number, Project>;
   showWeekends: boolean;
-  onEventAssign?: (
-    event:
-      | StoredEvent
-      | AggregatedGitEvent
-      | AggregatedBrowserEvent
-      | AggregatedRepositoryEvent
-  ) => void;
+  onEventAssign?: (event: UIEvent) => void;
   onAssignmentComplete?: () => void;
   githubOrgs: string[];
 }
@@ -115,28 +99,16 @@ interface CalendarViewProviderProps {
   onDateChange?: (date: Date) => void;
   projectMap?: Map<number, Project>;
   showWeekends?: boolean;
-  onEventAssign?: (
-    event:
-      | StoredEvent
-      | AggregatedGitEvent
-      | AggregatedBrowserEvent
-      | AggregatedRepositoryEvent
-  ) => void;
+  onEventAssign?: (event: UIEvent) => void;
   onAssignmentComplete?: () => void;
 }
 
 interface EventBlock {
-  event: StoredEvent;
+  event: UIEvent;
   top: number;
   height: number;
   column: number;
   totalColumns: number;
-  isGitAggregate?: boolean;
-  gitAggregate?: AggregatedGitEvent;
-  isBrowserAggregate?: boolean;
-  browserAggregate?: AggregatedBrowserEvent;
-  isRepositoryAggregate?: boolean;
-  repositoryAggregate?: AggregatedRepositoryEvent;
 }
 
 export function getViewTypeLabel(viewType: CalendarViewType): string {
@@ -276,281 +248,62 @@ function getMonthDays(date: Date, showWeekends: boolean = true): Date[] {
   return days;
 }
 
-// Helper to check if a calendar event is all-day
-function isAllDayEvent(event: StoredEvent): boolean {
-  if (event.event_type !== "calendar") return false;
-  try {
-    const data = JSON.parse(event.type_specific_data || "{}");
-    return data.is_all_day === true;
-  } catch {
-    return false;
-  }
-}
-
 function getEventsForDay(
-  events: StoredEvent[],
-  date: Date,
-  githubOrgs: string[] = []
+  allUIEvents: UIEvent[],
+  date: Date
 ): {
-  allDayEvents: StoredEvent[];
-  calendarEvents: StoredEvent[];
-  gitAggregates: AggregatedGitEvent[];
-  browserAggregates: AggregatedBrowserEvent[];
-  repositoryAggregates: AggregatedRepositoryEvent[];
+  allDayEvents: UIEvent[];
+  timedEvents: UIEvent[];
 } {
-  const dayStart = new Date(date);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(date);
-  dayEnd.setHours(23, 59, 59, 999);
-
-  // Separate calendar events into all-day and timed events
-  const allCalendarEvents = events.filter((event) => {
-    if (event.event_type !== "calendar") return false;
-
-    const eventStart = new Date(event.start_date);
-    const eventEnd = new Date(event.end_date);
-    return eventStart < dayEnd && eventEnd > dayStart;
-  });
-
-  const allDayEvents = allCalendarEvents.filter(isAllDayEvent);
-  const calendarEvents = allCalendarEvents.filter(
-    (event) => !isAllDayEvent(event)
-  );
-
-  // Aggregate repository events (unified git + browser)
-  const allRepositoryAggregates = aggregateRepositoryEvents(events);
-  const repositoryAggregates = allRepositoryAggregates.filter((aggregate) => {
-    const eventStart = new Date(aggregate.start_date);
-    const eventEnd = new Date(aggregate.end_date);
-    return eventStart < dayEnd && eventEnd > dayStart;
-  });
-
-  // Get repository paths that are covered by repository aggregates
-  const coveredRepoPaths = new Set(
-    repositoryAggregates.map((agg) => agg.repository_path)
-  );
-
-  // Aggregate git events (but filter out ones covered by repository aggregates)
-  const allGitAggregates = aggregateGitEvents(events);
-  const gitAggregates = allGitAggregates.filter((aggregate) => {
-    const eventStart = new Date(aggregate.start_date);
-    const eventEnd = new Date(aggregate.end_date);
-    const inDay = eventStart < dayEnd && eventEnd > dayStart;
-
-    // Check if any activity has repository_path that's covered
-    const hasCoveredRepoPath = aggregate.activities.some((activity) => {
-      const data = JSON.parse(activity.type_specific_data || "{}");
-      return data.repository_path && coveredRepoPaths.has(data.repository_path);
-    });
-
-    return inDay && !hasCoveredRepoPath;
-  });
-
-  // Aggregate browser events (but filter out ones covered by repository aggregates)
-  const allBrowserAggregates = aggregateBrowserEvents(events, githubOrgs);
-  const browserAggregates = allBrowserAggregates.filter((aggregate) => {
-    const eventStart = new Date(aggregate.start_date);
-    const eventEnd = new Date(aggregate.end_date);
-    const inDay = eventStart < dayEnd && eventEnd > dayStart;
-
-    // Check if any visit has repository_path that's covered
-    const hasCoveredRepoPath = aggregate.visits.some((visit) => {
-      const data = JSON.parse(visit.type_specific_data || "{}");
-      return data.repository_path && coveredRepoPaths.has(data.repository_path);
-    });
-
-    return inDay && !hasCoveredRepoPath;
-  });
-
-  return {
-    allDayEvents,
-    calendarEvents,
-    gitAggregates,
-    browserAggregates,
-    repositoryAggregates,
-  };
+  return filterUIEventsByDay(allUIEvents, date);
 }
 
-type DisplayItem =
-  | { type: "calendar"; event: StoredEvent }
-  | { type: "git"; aggregate: AggregatedGitEvent }
-  | { type: "browser"; aggregate: AggregatedBrowserEvent }
-  | { type: "repository"; aggregate: AggregatedRepositoryEvent };
-
-function calculateEventPositions(
-  calendarEvents: StoredEvent[],
-  gitAggregates: AggregatedGitEvent[],
-  browserAggregates: AggregatedBrowserEvent[],
-  repositoryAggregates: AggregatedRepositoryEvent[]
-): EventBlock[] {
+function calculateEventPositions(events: UIEvent[]): EventBlock[] {
   const HOUR_HEIGHT = 60;
 
-  // Combine calendar events and git/browser/repository aggregates into display items
-  const displayItems: DisplayItem[] = [
-    ...calendarEvents.map((event) => ({ type: "calendar" as const, event })),
-    ...repositoryAggregates.map((aggregate) => ({
-      type: "repository" as const,
-      aggregate,
-    })),
-    ...gitAggregates.map((aggregate) => ({ type: "git" as const, aggregate })),
-    ...browserAggregates.map((aggregate) => ({
-      type: "browser" as const,
-      aggregate,
-    })),
-  ];
-
   // Sort by start time
-  const sortedItems = displayItems.sort((a, b) => {
-    const aStart =
-      a.type === "calendar"
-        ? new Date(a.event.start_date).getTime()
-        : new Date(a.aggregate.start_date).getTime();
-    const bStart =
-      b.type === "calendar"
-        ? new Date(b.event.start_date).getTime()
-        : new Date(b.aggregate.start_date).getTime();
-    return aStart - bStart;
+  const sortedEvents = [...events].sort((a, b) => {
+    return new Date(a.start_date).getTime() - new Date(b.start_date).getTime();
   });
 
-  const columns: DisplayItem[][] = [];
+  const columns: UIEvent[][] = [];
 
-  sortedItems.forEach((item) => {
-    const itemStart =
-      item.type === "calendar"
-        ? new Date(item.event.start_date)
-        : new Date(item.aggregate.start_date);
+  sortedEvents.forEach((event) => {
+    const itemStart = new Date(event.start_date);
 
     let placed = false;
     for (let col = 0; col < columns.length; col++) {
-      const lastItem = columns[col][columns[col].length - 1];
-      const lastEnd =
-        lastItem.type === "calendar"
-          ? new Date(lastItem.event.end_date)
-          : new Date(lastItem.aggregate.end_date);
+      const lastEvent = columns[col][columns[col].length - 1];
+      const lastEnd = new Date(lastEvent.end_date);
 
       if (lastEnd <= itemStart) {
-        columns[col].push(item);
+        columns[col].push(event);
         placed = true;
         break;
       }
     }
     if (!placed) {
-      columns.push([item]);
+      columns.push([event]);
     }
   });
 
   const blocks: EventBlock[] = [];
   columns.forEach((col, colIndex) => {
-    col.forEach((item) => {
-      if (item.type === "calendar") {
-        const eventStart = new Date(item.event.start_date);
-        const eventEnd = new Date(item.event.end_date);
+    col.forEach((event) => {
+      const eventStart = new Date(event.start_date);
+      const eventEnd = new Date(event.end_date);
 
-        const startHour = eventStart.getHours() + eventStart.getMinutes() / 60;
-        const endHour = eventEnd.getHours() + eventEnd.getMinutes() / 60;
-        const duration = endHour - startHour;
+      const startHour = eventStart.getHours() + eventStart.getMinutes() / 60;
+      const endHour = eventEnd.getHours() + eventEnd.getMinutes() / 60;
+      const duration = endHour - startHour;
 
-        blocks.push({
-          event: item.event,
-          top: startHour * HOUR_HEIGHT,
-          height: Math.max(duration * HOUR_HEIGHT, 30),
-          column: colIndex,
-          totalColumns: columns.length,
-          isGitAggregate: false,
-        });
-      } else if (item.type === "git") {
-        // Git aggregate
-        const eventStart = new Date(item.aggregate.start_date);
-        const eventEnd = new Date(item.aggregate.end_date);
-
-        const startHour = eventStart.getHours() + eventStart.getMinutes() / 60;
-        const endHour = eventEnd.getHours() + eventEnd.getMinutes() / 60;
-        const duration = endHour - startHour;
-
-        // Create a synthetic StoredEvent for rendering
-        const syntheticEvent: StoredEvent = {
-          id: -1, // Use negative ID to indicate synthetic
-          event_type: "git",
-          title:
-            item.aggregate.repository_name.split("/").pop() ||
-            item.aggregate.repository_name,
-          start_date: item.aggregate.start_date,
-          end_date: item.aggregate.end_date,
-          project_id: item.aggregate.project_id,
-          created_at: "",
-          updated_at: "",
-        };
-
-        blocks.push({
-          event: syntheticEvent,
-          top: startHour * HOUR_HEIGHT,
-          height: Math.max(duration * HOUR_HEIGHT, 30),
-          column: colIndex,
-          totalColumns: columns.length,
-          isGitAggregate: true,
-          gitAggregate: item.aggregate,
-        });
-      } else if (item.type === "browser") {
-        // Browser aggregate
-        const eventStart = new Date(item.aggregate.start_date);
-        const eventEnd = new Date(item.aggregate.end_date);
-
-        const startHour = eventStart.getHours() + eventStart.getMinutes() / 60;
-        const endHour = eventEnd.getHours() + eventEnd.getMinutes() / 60;
-        const duration = endHour - startHour;
-
-        // Create a synthetic StoredEvent for rendering
-        const syntheticEvent: StoredEvent = {
-          id: -2, // Use -2 to indicate browser synthetic
-          event_type: "browser_history",
-          title: item.aggregate.title,
-          start_date: item.aggregate.start_date,
-          end_date: item.aggregate.end_date,
-          project_id: item.aggregate.project_id,
-          created_at: "",
-          updated_at: "",
-        };
-
-        blocks.push({
-          event: syntheticEvent,
-          top: startHour * HOUR_HEIGHT,
-          height: Math.max(duration * HOUR_HEIGHT, 30),
-          column: colIndex,
-          totalColumns: columns.length,
-          isBrowserAggregate: true,
-          browserAggregate: item.aggregate,
-        });
-      } else {
-        // Repository aggregate
-        const eventStart = new Date(item.aggregate.start_date);
-        const eventEnd = new Date(item.aggregate.end_date);
-
-        const startHour = eventStart.getHours() + eventStart.getMinutes() / 60;
-        const endHour = eventEnd.getHours() + eventEnd.getMinutes() / 60;
-        const duration = endHour - startHour;
-
-        // Create a synthetic StoredEvent for rendering
-        const syntheticEvent: StoredEvent = {
-          id: -3, // Use -3 to indicate repository synthetic
-          event_type: "git", // Primary type is git since it's repo-focused
-          title: item.aggregate.repository_name,
-          start_date: item.aggregate.start_date,
-          end_date: item.aggregate.end_date,
-          project_id: item.aggregate.project_id,
-          created_at: "",
-          updated_at: "",
-        };
-
-        blocks.push({
-          event: syntheticEvent,
-          top: startHour * HOUR_HEIGHT,
-          height: Math.max(duration * HOUR_HEIGHT, 30),
-          column: colIndex,
-          totalColumns: columns.length,
-          isRepositoryAggregate: true,
-          repositoryAggregate: item.aggregate,
-        });
-      }
+      blocks.push({
+        event,
+        top: startHour * HOUR_HEIGHT,
+        height: Math.max(duration * HOUR_HEIGHT, 30),
+        column: colIndex,
+        totalColumns: columns.length,
+      });
     });
   });
 
@@ -702,9 +455,9 @@ function AllDayEventsRow({
   projectMap,
   onEventClick,
 }: {
-  events: StoredEvent[];
+  events: UIEvent[];
   projectMap?: Map<number, Project>;
-  onEventClick: (event: StoredEvent) => void;
+  onEventClick: (event: UIEvent) => void;
 }) {
   if (events.length === 0) {
     return <div className="px-2 py-1 min-h-8"></div>;
@@ -759,19 +512,10 @@ function DayView({
 }) {
   const { onEventAssign, onAssignmentComplete, githubOrgs } =
     useCalendarViewContext();
-  const {
-    allDayEvents,
-    calendarEvents,
-    gitAggregates,
-    browserAggregates,
-    repositoryAggregates,
-  } = getEventsForDay(events, date, githubOrgs);
-  const eventBlocks = calculateEventPositions(
-    calendarEvents,
-    gitAggregates,
-    browserAggregates,
-    repositoryAggregates
-  );
+
+  const allUIEvents = aggregateAllEvents(githubOrgs, events);
+  const { allDayEvents, timedEvents } = getEventsForDay(allUIEvents, date);
+  const eventBlocks = calculateEventPositions(timedEvents);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const hours = Array.from({ length: 24 }, (_, i) => i);
@@ -815,26 +559,7 @@ function DayView({
                 return (
                   <EventBlock
                     key={idx}
-                    event={
-                      block.isGitAggregate ||
-                      block.isBrowserAggregate ||
-                      block.isRepositoryAggregate
-                        ? undefined
-                        : block.event
-                    }
-                    gitAggregate={
-                      block.isGitAggregate ? block.gitAggregate : undefined
-                    }
-                    browserAggregate={
-                      block.isBrowserAggregate
-                        ? block.browserAggregate
-                        : undefined
-                    }
-                    repositoryAggregate={
-                      block.isRepositoryAggregate
-                        ? block.repositoryAggregate
-                        : undefined
-                    }
+                    event={block.event}
                     projectMap={projectMap}
                     position={{
                       top: block.top,
@@ -844,21 +569,7 @@ function DayView({
                     }}
                     onClick={() => {
                       if (onEventAssign) {
-                        if (block.isGitAggregate && block.gitAggregate) {
-                          onEventAssign(block.gitAggregate);
-                        } else if (
-                          block.isBrowserAggregate &&
-                          block.browserAggregate
-                        ) {
-                          onEventAssign(block.browserAggregate);
-                        } else if (
-                          block.isRepositoryAggregate &&
-                          block.repositoryAggregate
-                        ) {
-                          onEventAssign(block.repositoryAggregate);
-                        } else {
-                          onEventAssign(block.event);
-                        }
+                        onEventAssign(block.event);
                       }
                     }}
                     onAssignmentComplete={onAssignmentComplete}
@@ -889,6 +600,8 @@ function WeekView({
   const weekDays = getWeekDays(date, showWeekends);
   const hours = Array.from({ length: 24 }, (_, i) => i);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const allUIEvents = aggregateAllEvents(githubOrgs, events);
 
   useScrollToHour(scrollRef, 8);
 
@@ -933,11 +646,7 @@ function WeekView({
             </div>
             <TooltipProvider>
               {weekDays.map((day) => {
-                const { allDayEvents } = getEventsForDay(
-                  events,
-                  day,
-                  githubOrgs
-                );
+                const { allDayEvents } = getEventsForDay(allUIEvents, day);
                 return (
                   <div
                     key={`allday-${day.toISOString()}`}
@@ -978,18 +687,8 @@ function WeekView({
           </div>
 
           {weekDays.map((day) => {
-            const {
-              calendarEvents,
-              gitAggregates,
-              browserAggregates,
-              repositoryAggregates,
-            } = getEventsForDay(events, day, githubOrgs);
-            const eventBlocks = calculateEventPositions(
-              calendarEvents,
-              gitAggregates,
-              browserAggregates,
-              repositoryAggregates
-            );
+            const { timedEvents } = getEventsForDay(allUIEvents, day);
+            const eventBlocks = calculateEventPositions(timedEvents);
 
             return (
               <div key={day.toISOString()} className="relative">
@@ -1008,26 +707,7 @@ function WeekView({
                     return (
                       <EventBlock
                         key={idx}
-                        event={
-                          block.isGitAggregate ||
-                          block.isBrowserAggregate ||
-                          block.isRepositoryAggregate
-                            ? undefined
-                            : block.event
-                        }
-                        gitAggregate={
-                          block.isGitAggregate ? block.gitAggregate : undefined
-                        }
-                        browserAggregate={
-                          block.isBrowserAggregate
-                            ? block.browserAggregate
-                            : undefined
-                        }
-                        repositoryAggregate={
-                          block.isRepositoryAggregate
-                            ? block.repositoryAggregate
-                            : undefined
-                        }
+                        event={block.event}
                         projectMap={projectMap}
                         position={{
                           top: block.top,
@@ -1037,21 +717,7 @@ function WeekView({
                         }}
                         onClick={() => {
                           if (onEventAssign) {
-                            if (block.isGitAggregate && block.gitAggregate) {
-                              onEventAssign(block.gitAggregate);
-                            } else if (
-                              block.isBrowserAggregate &&
-                              block.browserAggregate
-                            ) {
-                              onEventAssign(block.browserAggregate);
-                            } else if (
-                              block.isRepositoryAggregate &&
-                              block.repositoryAggregate
-                            ) {
-                              onEventAssign(block.repositoryAggregate);
-                            } else {
-                              onEventAssign(block.event);
-                            }
+                            onEventAssign(block.event);
                           }
                         }}
                         onAssignmentComplete={onAssignmentComplete}
@@ -1087,6 +753,7 @@ function MonthView({
     githubOrgs,
   } = useCalendarViewContext();
 
+  const allUIEvents = aggregateAllEvents(githubOrgs, events);
   const monthDays = getMonthDays(date, showWeekends);
 
   const dayLabels = showWeekends
@@ -1153,45 +820,18 @@ function MonthView({
         }}
       >
         {monthDays.map((day) => {
-          const {
-            calendarEvents,
-            gitAggregates,
-            browserAggregates,
-            repositoryAggregates,
-          } = getEventsForDay(events, day, githubOrgs);
-
-          // Combine all event types for display
-          type MonthDisplayItem =
-            | { type: "calendar"; event: StoredEvent }
-            | { type: "git"; aggregate: AggregatedGitEvent }
-            | { type: "browser"; aggregate: AggregatedBrowserEvent }
-            | { type: "repository"; aggregate: AggregatedRepositoryEvent };
-
-          const allDisplayItems: MonthDisplayItem[] = [
-            ...calendarEvents.map((event) => ({
-              type: "calendar" as const,
-              event,
-            })),
-            ...repositoryAggregates.map((aggregate) => ({
-              type: "repository" as const,
-              aggregate,
-            })),
-            ...gitAggregates.map((aggregate) => ({
-              type: "git" as const,
-              aggregate,
-            })),
-            ...browserAggregates.map((aggregate) => ({
-              type: "browser" as const,
-              aggregate,
-            })),
-          ];
-
-          const needPlaceholder = allDisplayItems.length > maxEvents;
-          const visibleItems = allDisplayItems.slice(
-            0,
-            needPlaceholder ? maxEvents - 1 : allDisplayItems.length
+          const { allDayEvents, timedEvents } = getEventsForDay(
+            allUIEvents,
+            day
           );
-          const remainingCount = allDisplayItems.length - visibleItems.length;
+          const allEventsForDay = [...allDayEvents, ...timedEvents];
+
+          const needPlaceholder = allEventsForDay.length > maxEvents;
+          const visibleItems = allEventsForDay.slice(
+            0,
+            needPlaceholder ? maxEvents - 1 : allEventsForDay.length
+          );
+          const remainingCount = allEventsForDay.length - visibleItems.length;
           const isCurrentMonth = day.getMonth() === date.getMonth();
 
           return (
@@ -1215,49 +855,19 @@ function MonthView({
 
               <div className="flex-1 min-h-0">
                 <TooltipProvider>
-                  {visibleItems.map((item) => {
-                    let key: string;
-                    if (item.type === "calendar") {
-                      key = `calendar-${item.event.id}`;
-                    } else if (item.type === "git") {
-                      key = `git-${item.aggregate.id}`;
-                    } else if (item.type === "browser") {
-                      key = `browser-${item.aggregate.id}`;
-                    } else {
-                      key = `repository-${item.aggregate.id}`;
-                    }
-
-                    return (
-                      <MonthEventBlock
-                        key={key}
-                        event={
-                          item.type === "calendar" ? item.event : undefined
+                  {visibleItems.map((event) => (
+                    <MonthEventBlock
+                      key={event.id}
+                      event={event}
+                      projectMap={projectMap}
+                      onClick={() => {
+                        if (onEventAssign) {
+                          onEventAssign(event);
                         }
-                        gitAggregate={
-                          item.type === "git" ? item.aggregate : undefined
-                        }
-                        browserAggregate={
-                          item.type === "browser" ? item.aggregate : undefined
-                        }
-                        repositoryAggregate={
-                          item.type === "repository"
-                            ? item.aggregate
-                            : undefined
-                        }
-                        projectMap={projectMap}
-                        onClick={() => {
-                          if (onEventAssign) {
-                            if (item.type === "calendar") {
-                              onEventAssign(item.event);
-                            } else {
-                              onEventAssign(item.aggregate);
-                            }
-                          }
-                        }}
-                        onAssignmentComplete={onAssignmentComplete}
-                      />
-                    );
-                  })}
+                      }}
+                      onAssignmentComplete={onAssignmentComplete}
+                    />
+                  ))}
                 </TooltipProvider>
 
                 {remainingCount > 0 && (

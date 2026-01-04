@@ -219,7 +219,7 @@ export function isAggregatedGitEvent(
 // ============================================================================
 
 export type BrowserAggregateType =
-  | "collaborative_doc"
+  | "document"
   | "code_repo"
   | "project_tool"
   | "domain";
@@ -282,7 +282,7 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
   // Dropbox Paper (including www.dropbox.com paper links)
   {
     pattern: /^(paper\.dropbox\.com|www\.dropbox\.com)$/,
-    type: "collaborative_doc",
+    type: "document",
     extractGroupingKey: (url, pageTitle) => {
       // Filter out root domains, search pages, and folder views
       if (
@@ -323,7 +323,7 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
   // Google Docs/Sheets/Slides
   {
     pattern: /^docs\.google\.com$/,
-    type: "collaborative_doc",
+    type: "document",
     extractGroupingKey: (url, pageTitle) => {
       // Filter out root domain
       if (
@@ -357,7 +357,7 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
   // Monday.com - boards and docs
   {
     pattern: /^.*\.monday\.com$/,
-    type: "collaborative_doc",
+    type: "document",
     extractGroupingKey: (url, pageTitle) => {
       // Filter out root domains
       if (
@@ -393,103 +393,6 @@ const DOMAIN_CONFIGS: DomainConfig[] = [
       }
 
       return pageTitle;
-    },
-    generateTitle: (groupingKey) => groupingKey,
-  },
-  // Notion
-  {
-    pattern: /^([^.]+\.)?notion\.(so|site)$/,
-    type: "collaborative_doc",
-    extractGroupingKey: (_url, pageTitle) => {
-      // Filter out generic titles
-      if (!pageTitle || pageTitle === "Notion") {
-        return null;
-      }
-      return pageTitle;
-    },
-    generateTitle: (groupingKey) => groupingKey,
-  },
-  // GitLab - Group by repository path from URL
-  {
-    pattern: /^gitlab\.com$/,
-    type: "code_repo",
-    extractGroupingKey: (url, _pageTitle) => {
-      // Filter out docs and root domain
-      if (
-        url.includes("docs.gitlab.com") ||
-        url === "https://gitlab.com/" ||
-        url === "https://gitlab.com"
-      ) {
-        return null;
-      }
-      const match = url.match(/gitlab\.com\/([^/?#]+\/[^/?#]+)/);
-      if (!match) return null;
-      const repo = match[1].split("/").slice(0, 2).join("/");
-      return repo;
-    },
-    generateTitle: (groupingKey) => groupingKey, // Just the repo path, icon will indicate it's GitLab
-  },
-  // Slack
-  {
-    pattern: /^[^.]+\.slack\.com$/,
-    type: "project_tool",
-    extractGroupingKey: (url, _pageTitle) => {
-      // Extract workspace from domain
-      const workspace = new URL(url).hostname.split(".")[0];
-      const match = url.match(/\/archives\/([^/?#]+)/);
-      if (match) {
-        return `${workspace}#${match[1]}`;
-      }
-      return workspace;
-    },
-    generateTitle: (groupingKey) => `Slack: ${groupingKey}`,
-  },
-  // Jira (Atlassian)
-  {
-    pattern: /^.*\.atlassian\.net$/,
-    type: "project_tool",
-    extractGroupingKey: (url, pageTitle) => {
-      // Match project key from issue browse or project pages
-      const issueMatch = url.match(/\/browse\/([A-Z]+-\d+)/);
-      if (issueMatch) {
-        const projectKey = issueMatch[1].split("-")[0];
-        return projectKey;
-      }
-      const projectMatch = url.match(/\/projects\/([^/?#]+)/);
-      if (projectMatch) {
-        return projectMatch[1];
-      }
-      return pageTitle || "Jira";
-    },
-    generateTitle: (groupingKey) =>
-      groupingKey === "Jira" ? groupingKey : `Jira: ${groupingKey}`,
-  },
-  // Linear
-  {
-    pattern: /^linear\.app$/,
-    type: "project_tool",
-    extractGroupingKey: (url, pageTitle) => {
-      const match = url.match(/\/team\/([^/?#]+)/);
-      return match ? match[1] : pageTitle || "Linear";
-    },
-    generateTitle: (groupingKey) =>
-      groupingKey === "Linear" ? groupingKey : `Linear: ${groupingKey}`,
-  },
-  // Figma
-  {
-    pattern: /^([^.]+\.)?figma\.com$/,
-    type: "collaborative_doc",
-    extractGroupingKey: (_url, pageTitle) => {
-      // Filter out generic titles
-      let cleanTitle = pageTitle.replace(/ - Figma$/, "").trim();
-      if (
-        !cleanTitle ||
-        cleanTitle === "Figma" ||
-        cleanTitle.startsWith("Untitled")
-      ) {
-        return null;
-      }
-      return cleanTitle;
     },
     generateTitle: (groupingKey) => groupingKey,
   },
@@ -657,8 +560,7 @@ function createBrowserAggregateFromGroup(
   const THIRTY_MINUTES_MS = 30 * 60 * 1000;
 
   // Start buffer: -15 min for collaborative docs, none for others
-  const startBuffer =
-    config.type === "collaborative_doc" ? FIFTEEN_MINUTES_MS : 0;
+  const startBuffer = config.type === "document" ? FIFTEEN_MINUTES_MS : 0;
   const adjustedStart = minStart - startBuffer;
 
   // End buffer: +15 min (assume work continued)
@@ -677,7 +579,7 @@ function createBrowserAggregateFromGroup(
   let repository: string | undefined;
   let workspace: string | undefined;
 
-  if (config.type === "collaborative_doc") {
+  if (config.type === "document") {
     document_id = groupingKey;
   } else if (config.type === "code_repo") {
     repository = groupingKey;
@@ -807,4 +709,165 @@ export function aggregateRepositoryEvents(
   }
 
   return aggregated;
+}
+
+// ============================================================================
+// Unified UI Event Interface
+// ============================================================================
+
+export interface UIEvent {
+  id: string;
+  type: "calendar" | "git" | "browser" | "repository";
+  title: string;
+  start_date: string;
+  end_date: string;
+  project_id?: number;
+  is_all_day: boolean;
+
+  // Unified activities - all events that contribute to this UI event
+  // For calendar: single StoredEvent
+  // For git/browser/repository: multiple StoredEvents that were aggregated
+  activities: StoredEvent[];
+
+  // Browser-specific fields for rendering
+  aggregate_type?: BrowserAggregateType;
+  domain?: string;
+
+  // Repository-specific fields
+  repository_path?: string;
+  repository_name?: string;
+  origin_url?: string;
+}
+
+function storedEventToUIEvent(event: StoredEvent): UIEvent {
+  let is_all_day = false;
+  if (event.event_type === "calendar") {
+    try {
+      const data = JSON.parse(event.type_specific_data || "{}");
+      is_all_day = data.is_all_day === true;
+    } catch {
+      // ignore parse errors
+    }
+  }
+
+  return {
+    id: `event-${event.id}`,
+    type: "calendar",
+    title: event.title,
+    start_date: event.start_date,
+    end_date: event.end_date,
+    project_id: event.project_id,
+    is_all_day,
+    activities: [event],
+  };
+}
+
+function gitAggregateToUIEvent(aggregate: AggregatedGitEvent): UIEvent {
+  return {
+    id: aggregate.id,
+    type: "git",
+    title:
+      aggregate.repository_name.split("/").pop() || aggregate.repository_name,
+    start_date: aggregate.start_date,
+    end_date: aggregate.end_date,
+    project_id: aggregate.project_id,
+    is_all_day: false,
+    activities: aggregate.activities,
+    repository_name: aggregate.repository_name,
+  };
+}
+
+function browserAggregateToUIEvent(aggregate: AggregatedBrowserEvent): UIEvent {
+  return {
+    id: aggregate.id,
+    type: "browser",
+    title: aggregate.title,
+    start_date: aggregate.start_date,
+    end_date: aggregate.end_date,
+    project_id: aggregate.project_id,
+    is_all_day: false,
+    activities: aggregate.visits,
+    aggregate_type: aggregate.aggregate_type,
+    domain: aggregate.domain,
+  };
+}
+
+function repositoryAggregateToUIEvent(
+  aggregate: AggregatedRepositoryEvent
+): UIEvent {
+  return {
+    id: aggregate.id,
+    type: "repository",
+    title: aggregate.repository_name,
+    start_date: aggregate.start_date,
+    end_date: aggregate.end_date,
+    project_id: aggregate.project_id,
+    is_all_day: false,
+    activities: [...aggregate.git_activities, ...aggregate.browser_visits],
+    repository_path: aggregate.repository_path,
+    repository_name: aggregate.repository_name,
+    origin_url: aggregate.origin_url,
+  };
+}
+
+export function aggregateAllEvents(
+  githubOrgs: string[],
+  eventsData: StoredEvent[]
+): UIEvent[] {
+  const repositoryAggregates = aggregateRepositoryEvents(eventsData);
+  const coveredRepoPaths = new Set(
+    repositoryAggregates.map((agg) => agg.repository_path)
+  );
+
+  const gitAggregates = aggregateGitEvents(eventsData).filter((aggregate) => {
+    const hasCoveredRepoPath = aggregate.activities.some((activity) => {
+      const data = JSON.parse(activity.type_specific_data || "{}");
+      return data.repository_path && coveredRepoPaths.has(data.repository_path);
+    });
+    return !hasCoveredRepoPath;
+  });
+
+  const browserAggregates = aggregateBrowserEvents(
+    eventsData,
+    githubOrgs
+  ).filter((aggregate) => {
+    const hasCoveredRepoPath = aggregate.visits.some((visit) => {
+      const data = JSON.parse(visit.type_specific_data || "{}");
+      return data.repository_path && coveredRepoPaths.has(data.repository_path);
+    });
+    return !hasCoveredRepoPath;
+  });
+
+  const calendarEvents = eventsData.filter((e) => e.event_type === "calendar");
+
+  return [
+    ...repositoryAggregates.map(repositoryAggregateToUIEvent),
+    ...gitAggregates.map(gitAggregateToUIEvent),
+    ...browserAggregates.map(browserAggregateToUIEvent),
+    ...calendarEvents.map(storedEventToUIEvent),
+  ];
+}
+
+export function filterUIEventsByDay(
+  events: UIEvent[],
+  date: Date
+): {
+  allDayEvents: UIEvent[];
+  timedEvents: UIEvent[];
+} {
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(date);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  const eventsInDay = events.filter((event) => {
+    const eventStart = new Date(event.start_date);
+    const eventEnd = new Date(event.end_date);
+    return eventStart < dayEnd && eventEnd > dayStart;
+  });
+
+  const allDayEvents = eventsInDay.filter((event) => event.is_all_day);
+  const timedEvents = eventsInDay.filter((event) => !event.is_all_day);
+
+  return { allDayEvents, timedEvents };
 }

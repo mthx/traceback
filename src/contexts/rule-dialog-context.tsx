@@ -1,12 +1,6 @@
 import { EventDetailsDialog } from "@/components/event-details-dialog";
 import { RuleEditDialog } from "@/components/rule-edit-dialog";
-import type {
-  AggregatedGitEvent,
-  AggregatedBrowserEvent,
-  AggregatedRepositoryEvent,
-  Project,
-  StoredEvent,
-} from "@/types/event";
+import type { Project, StoredEvent, UIEvent } from "@/types/event";
 import { createContext, useContext, useState, type ReactNode } from "react";
 
 interface SharedDialogsContextValue {
@@ -15,14 +9,7 @@ interface SharedDialogsContextValue {
     event: StoredEvent,
     onSaved?: () => void
   ) => void;
-  openEventDialog: (
-    event:
-      | StoredEvent
-      | AggregatedGitEvent
-      | AggregatedBrowserEvent
-      | AggregatedRepositoryEvent,
-    onAssignmentComplete?: () => void
-  ) => void;
+  openEventDialog: (event: UIEvent, onAssignmentComplete?: () => void) => void;
 }
 
 const SharedDialogsContext = createContext<SharedDialogsContextValue | null>(
@@ -62,13 +49,7 @@ export function SharedDialogsProvider({
 
   // Event dialog state
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
-  const [dialogEvent, setDialogEvent] = useState<
-    | StoredEvent
-    | AggregatedGitEvent
-    | AggregatedBrowserEvent
-    | AggregatedRepositoryEvent
-    | null
-  >(null);
+  const [dialogEvent, setDialogEvent] = useState<UIEvent | null>(null);
   const [eventOnComplete, setEventOnComplete] = useState<
     (() => void) | undefined
   >(undefined);
@@ -91,14 +72,7 @@ export function SharedDialogsProvider({
     setRuleDialogOpen(false);
   }
 
-  function openEventDialog(
-    event:
-      | StoredEvent
-      | AggregatedGitEvent
-      | AggregatedBrowserEvent
-      | AggregatedRepositoryEvent,
-    onAssignmentComplete?: () => void
-  ) {
+  function openEventDialog(event: UIEvent, onAssignmentComplete?: () => void) {
     setDialogEvent(event);
     setEventOnComplete(() => onAssignmentComplete);
     setEventDialogOpen(true);

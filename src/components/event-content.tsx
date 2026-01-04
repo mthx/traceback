@@ -1,17 +1,6 @@
 import { EventDetails } from "@/components/event-details";
 import { Button } from "@/components/ui/button";
-import type {
-  AggregatedGitEvent,
-  AggregatedBrowserEvent,
-  AggregatedRepositoryEvent,
-  Project,
-  StoredEvent,
-} from "@/types/event";
-import {
-  isAggregatedGitEvent,
-  isAggregatedBrowserEvent,
-  isAggregatedRepositoryEvent,
-} from "@/types/event";
+import type { Project, UIEvent } from "@/types/event";
 import { invoke } from "@tauri-apps/api/core";
 import { useRuleDialog } from "@/contexts/rule-dialog-context";
 import {
@@ -72,7 +61,7 @@ export function getEventIcon(
       return GitHubIcon;
     }
     // Use platform-specific icons for collaborative docs
-    if (browserAggregateType === "collaborative_doc" && domain) {
+    if (browserAggregateType === "document" && domain) {
       return getCollaborativeDocIcon(domain);
     } else if (browserAggregateType === "code_repo") {
       return GitBranch;
@@ -98,23 +87,22 @@ export function getContrastingTextColor(hexcolor: string | undefined): string {
 }
 
 interface EventHeaderProps {
-  event:
-    | StoredEvent
-    | AggregatedGitEvent
-    | AggregatedBrowserEvent
-    | AggregatedRepositoryEvent;
+  event: UIEvent;
 }
 
 export function EventHeader({ event }: EventHeaderProps) {
-  let title: string;
-  let eventType: string;
-  let browserAggregateType: BrowserAggregateType | undefined;
-  let domain: string | undefined;
+  const title = event.title;
+  let eventType =
+    event.type === "repository" || event.type === "git"
+      ? "git"
+      : event.type === "browser"
+        ? "browser_history"
+        : "calendar";
+  let browserAggregateType = event.aggregate_type;
+  let domain = event.domain;
 
-  if (isAggregatedRepositoryEvent(event)) {
-    title = event.repository_name;
-    eventType = "git";
-    // Check if this is a GitHub repository by looking at origin_url or repository_path
+  // Special handling for repository events that are GitHub repos
+  if (event.type === "repository") {
     if (
       event.origin_url?.includes("github.com") ||
       event.repository_path?.includes("github.com")
@@ -123,9 +111,7 @@ export function EventHeader({ event }: EventHeaderProps) {
       browserAggregateType = "code_repo";
       domain = "github.com";
     }
-  } else if (isAggregatedGitEvent(event)) {
-    title = event.repository_name;
-    eventType = "git";
+  } else if (event.type === "git") {
     // Check if this is a GitHub repository
     const firstActivity = event.activities[0];
     if (firstActivity) {
@@ -140,14 +126,6 @@ export function EventHeader({ event }: EventHeaderProps) {
         // Ignore parse errors
       }
     }
-  } else if (isAggregatedBrowserEvent(event)) {
-    title = event.title;
-    eventType = "browser_history";
-    browserAggregateType = event.aggregate_type;
-    domain = event.domain;
-  } else {
-    title = event.title;
-    eventType = event.event_type;
   }
 
   const Icon = getEventIcon(eventType, browserAggregateType, domain);
@@ -253,11 +231,7 @@ export function EventProjectSelector({
 }
 
 interface EventContentProps {
-  event:
-    | StoredEvent
-    | AggregatedGitEvent
-    | AggregatedBrowserEvent
-    | AggregatedRepositoryEvent;
+  event: UIEvent;
   onAssignmentComplete?: () => void;
   showHeader?: boolean;
 }
@@ -295,41 +269,14 @@ export function EventContent({
     setError(null);
 
     try {
-      if (isAggregatedRepositoryEvent(event)) {
-        // Assign all git activities and browser visits
-        const allEvents = [...event.git_activities, ...event.browser_visits];
-        await Promise.all(
-          allEvents.map((evt) =>
-            invoke("assign_event_to_project", {
-              eventId: evt.id,
-              projectId: projectId,
-            })
-          )
-        );
-      } else if (isAggregatedGitEvent(event)) {
-        await Promise.all(
-          event.activities.map((activity) =>
-            invoke("assign_event_to_project", {
-              eventId: activity.id,
-              projectId: projectId,
-            })
-          )
-        );
-      } else if (isAggregatedBrowserEvent(event)) {
-        await Promise.all(
-          event.visits.map((visit) =>
-            invoke("assign_event_to_project", {
-              eventId: visit.id,
-              projectId: projectId,
-            })
-          )
-        );
-      } else {
-        await invoke("assign_event_to_project", {
-          eventId: event.id,
-          projectId: projectId,
-        });
-      }
+      await Promise.all(
+        event.activities.map((activity) =>
+          invoke("assign_event_to_project", {
+            eventId: activity.id,
+            projectId: projectId,
+          })
+        )
+      );
 
       setSelectedProjectId(projectId);
       if (onAssignmentComplete) {
@@ -348,41 +295,14 @@ export function EventContent({
     setError(null);
 
     try {
-      if (isAggregatedRepositoryEvent(event)) {
-        // Unassign all git activities and browser visits
-        const allEvents = [...event.git_activities, ...event.browser_visits];
-        await Promise.all(
-          allEvents.map((evt) =>
-            invoke("assign_event_to_project", {
-              eventId: evt.id,
-              projectId: null,
-            })
-          )
-        );
-      } else if (isAggregatedGitEvent(event)) {
-        await Promise.all(
-          event.activities.map((activity) =>
-            invoke("assign_event_to_project", {
-              eventId: activity.id,
-              projectId: null,
-            })
-          )
-        );
-      } else if (isAggregatedBrowserEvent(event)) {
-        await Promise.all(
-          event.visits.map((visit) =>
-            invoke("assign_event_to_project", {
-              eventId: visit.id,
-              projectId: null,
-            })
-          )
-        );
-      } else {
-        await invoke("assign_event_to_project", {
-          eventId: event.id,
-          projectId: null,
-        });
-      }
+      await Promise.all(
+        event.activities.map((activity) =>
+          invoke("assign_event_to_project", {
+            eventId: activity.id,
+            projectId: null,
+          })
+        )
+      );
 
       setSelectedProjectId(null);
       if (onAssignmentComplete) {
@@ -401,19 +321,12 @@ export function EventContent({
     : null;
 
   function handleCreateRule() {
-    if (selectedProject) {
-      let eventForRule: StoredEvent;
-      if (isAggregatedRepositoryEvent(event)) {
-        // Prefer git activities, fallback to browser visits
-        eventForRule = event.git_activities[0] || event.browser_visits[0];
-      } else if (isAggregatedGitEvent(event)) {
-        eventForRule = event.activities[0];
-      } else if (isAggregatedBrowserEvent(event)) {
-        eventForRule = event.visits[0];
-      } else {
-        eventForRule = event;
-      }
-      openRuleDialog(selectedProject, eventForRule, onAssignmentComplete);
+    if (selectedProject && event.activities.length > 0) {
+      openRuleDialog(
+        selectedProject,
+        event.activities[0],
+        onAssignmentComplete
+      );
     }
   }
 
