@@ -1,21 +1,15 @@
 import { EventDetailsDialog } from "@/components/event-details-dialog";
 import { RuleEditDialog } from "@/components/rule-edit-dialog";
 import type { Project, StoredEvent, UIEvent } from "@/types/event";
-import { invoke } from "@tauri-apps/api/core";
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  type ReactNode,
-} from "react";
+import { useProjects } from "@/contexts/projects-context";
+import { createContext, useContext, useState, type ReactNode } from "react";
 
 interface SharedDialogsContextValue {
   openRuleDialog: (
     project: Project,
     event: StoredEvent,
     onSaved?: () => void
-  ) => void;
+  ) => Promise<void>;
   openEventDialog: (event: UIEvent, onAssignmentComplete?: () => void) => void;
 }
 
@@ -46,8 +40,7 @@ interface SharedDialogsProviderProps {
 export function SharedDialogsProvider({
   children,
 }: SharedDialogsProviderProps) {
-  // Shared state
-  const [projects, setProjects] = useState<Project[]>([]);
+  const { projects } = useProjects();
 
   // Rule dialog state
   const [ruleDialogOpen, setRuleDialogOpen] = useState(false);
@@ -64,19 +57,7 @@ export function SharedDialogsProvider({
     (() => void) | undefined
   >(undefined);
 
-  useEffect(() => {
-    async function fetchProjects() {
-      try {
-        const result = await invoke<Project[]>("get_all_projects");
-        setProjects(result);
-      } catch (err) {
-        console.error("Error fetching projects:", err);
-      }
-    }
-    fetchProjects();
-  }, []);
-
-  function openRuleDialog(
+  async function openRuleDialog(
     project: Project,
     event: StoredEvent,
     onSaved?: () => void

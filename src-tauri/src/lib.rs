@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use sync::{sync_git_activity, sync_single_event};
 use tauri::menu::{MenuBuilder, SubmenuBuilder};
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 
 #[derive(Clone)]
 struct AppState {
@@ -471,26 +471,34 @@ fn sync_browser_source(
 
 #[tauri::command]
 fn create_project(
+    app: tauri::AppHandle,
     state: State<AppState>,
     name: String,
     color: Option<String>,
 ) -> Result<i64, String> {
-    state.with_db(|db| db.create_project(&name, color.as_deref()))
+    let result = state.with_db(|db| db.create_project(&name, color.as_deref()))?;
+    app.emit("projects-changed", ()).ok();
+    Ok(result)
 }
 
 #[tauri::command]
 fn update_project(
+    app: tauri::AppHandle,
     state: State<AppState>,
     id: i64,
     name: String,
     color: Option<String>,
 ) -> Result<(), String> {
-    state.with_db(|db| db.update_project(id, &name, color.as_deref()))
+    state.with_db(|db| db.update_project(id, &name, color.as_deref()))?;
+    app.emit("projects-changed", ()).ok();
+    Ok(())
 }
 
 #[tauri::command]
-fn delete_project(state: State<AppState>, id: i64) -> Result<(), String> {
-    state.with_db(|db| db.delete_project(id))
+fn delete_project(app: tauri::AppHandle, state: State<AppState>, id: i64) -> Result<(), String> {
+    state.with_db(|db| db.delete_project(id))?;
+    app.emit("projects-changed", ()).ok();
+    Ok(())
 }
 
 #[tauri::command]
@@ -568,10 +576,11 @@ fn get_project_rules(
 fn update_project_rule(
     state: State<AppState>,
     rule_id: i64,
+    project_id: i64,
     rule_type: String,
     match_value: String,
 ) -> Result<(), String> {
-    state.with_db(|db| db.update_project_rule(rule_id, &rule_type, &match_value))
+    state.with_db(|db| db.update_project_rule(rule_id, project_id, &rule_type, &match_value))
 }
 
 #[tauri::command]

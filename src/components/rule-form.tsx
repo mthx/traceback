@@ -89,6 +89,7 @@ export function RuleForm({
       if (rule && rule.id) {
         await invoke("update_project_rule", {
           ruleId: rule.id,
+          projectId: formData.projectId,
           ruleType: formData.ruleType,
           matchValue: formData.matchValue,
         });

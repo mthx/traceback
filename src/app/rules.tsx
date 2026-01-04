@@ -8,9 +8,10 @@ import {
 } from "@/components/ui/dialog";
 import { RuleForm } from "@/components/rule-form";
 import { invoke } from "@tauri-apps/api/core";
-import { Plus, Trash2, SlidersHorizontal } from "lucide-react";
+import { Plus, Trash2, SlidersHorizontal, RefreshCw } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { usePersistedState } from "@/hooks/use-persisted-state";
+import { useProjects } from "@/contexts/projects-context";
 import type { Project, ProjectRule } from "../types/event";
 
 function DetailPanel({
@@ -58,8 +59,8 @@ function DetailPanel({
 }
 
 export function Rules() {
+  const { projects } = useProjects();
   const [rules, setRules] = useState<ProjectRule[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -68,6 +69,8 @@ export function Rules() {
     number | null
   >("rulesFocusedRuleId", null);
   const ruleRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
+  const [applyingRules, setApplyingRules] = useState(false);
+  const [applyRulesResult, setApplyRulesResult] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -76,6 +79,12 @@ export function Rules() {
   useEffect(() => {
     const handleFocusChange = () => {
       const focusedElement = document.activeElement as HTMLElement;
+
+      const detailPanel = document.querySelector('.flex-2');
+      if (detailPanel?.contains(focusedElement)) {
+        return;
+      }
+
       const ruleId = focusedElement?.dataset?.ruleId;
       const newFocusedRule = ruleId
         ? rules.find((r) => r.id === Number(ruleId)) || null
@@ -147,12 +156,10 @@ export function Rules() {
     setError(null);
 
     try {
-      const [allProjects, allRules] = await Promise.all([
-        invoke<Project[]>("get_all_projects"),
-        invoke<ProjectRule[]>("get_project_rules", { projectId: null }),
-      ]);
+      const allRules = await invoke<ProjectRule[]>("get_project_rules", {
+        projectId: null,
+      });
 
-      setProjects(allProjects);
       setRules(allRules);
     } catch (err) {
       setError(err as string);
@@ -199,15 +206,48 @@ export function Rules() {
     return project?.name || "Unknown Project";
   }
 
+  async function handleApplyRules() {
+    setApplyingRules(true);
+    setApplyRulesResult(null);
+    setError(null);
+
+    try {
+      const count = await invoke<number>("apply_rules_to_events");
+      setApplyRulesResult(`Applied rules to ${count} event${count !== 1 ? 's' : ''}`);
+      setTimeout(() => setApplyRulesResult(null), 3000);
+    } catch (err) {
+      setError(err as string);
+      console.error("Error applying rules:", err);
+    } finally {
+      setApplyingRules(false);
+    }
+  }
+
   return (
     <div className="flex h-full">
       <div className="flex-3 flex flex-col border-r min-w-0">
         <div className="px-4 py-4 border-b">
-          <div className="flex items-center justify-end">
-            <Button onClick={openAddRuleDialog} size="sm" variant="outline">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Rule
-            </Button>
+          <div className="flex items-center justify-between">
+            {applyRulesResult && (
+              <span className="text-sm text-muted-foreground">
+                {applyRulesResult}
+              </span>
+            )}
+            <div className="flex items-center gap-2 ml-auto">
+              <Button onClick={openAddRuleDialog} size="sm" variant="outline">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Rule
+              </Button>
+              <Button
+                onClick={handleApplyRules}
+                size="sm"
+                variant="outline"
+                disabled={applyingRules || rules.length === 0}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${applyingRules ? 'animate-spin' : ''}`} />
+                {applyingRules ? 'Applying...' : 'Apply Rules'}
+              </Button>
+            </div>
           </div>
         </div>
 

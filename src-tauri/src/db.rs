@@ -924,12 +924,13 @@ impl Database {
     pub fn update_project_rule(
         &self,
         rule_id: i64,
+        project_id: i64,
         rule_type: &str,
         match_value: &str,
     ) -> Result<()> {
         self.conn.execute(
-            "UPDATE project_rules SET rule_type = ?1, match_value = ?2 WHERE id = ?3",
-            rusqlite::params![rule_type, match_value, rule_id],
+            "UPDATE project_rules SET project_id = ?1, rule_type = ?2, match_value = ?3 WHERE id = ?4",
+            rusqlite::params![project_id, rule_type, match_value, rule_id],
         )?;
         Ok(())
     }

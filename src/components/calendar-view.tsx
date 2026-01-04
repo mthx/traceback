@@ -26,6 +26,7 @@ import {
 import { EventBlock } from "@/components/event-block";
 import { MonthEventBlock } from "@/components/month-event-block";
 import { EventTooltipContent } from "@/components/event-tooltip-content";
+import { getContrastingTextColor } from "@/components/event-content";
 import {
   isToday,
   todayIndicatorClass,
@@ -480,7 +481,7 @@ function AllDayEventsRow({
                   className="px-2 py-0.5 rounded text-xs font-medium text-left hover:opacity-80 transition-opacity w-full truncate min-w-0"
                   style={{
                     backgroundColor: eventColor,
-                    color: "#ffffff",
+                    color: getContrastingTextColor(eventColor),
                   }}
                   onClick={() => onEventClick(event)}
                 >

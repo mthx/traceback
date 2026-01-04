@@ -9,7 +9,7 @@ import {
   AlertCircle,
   SlidersHorizontal,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -50,9 +50,10 @@ import { Log } from "./log";
 import { Projects } from "./projects";
 import { Settings } from "./settings";
 import { Rules } from "./rules";
-import { useAutoSync, useSyncComplete } from "../hooks/sync-hooks";
+import { useAutoSync } from "../hooks/sync-hooks";
 import type { DateRange } from "../components/date-range-filter";
 import { RuleDialogProvider } from "../contexts/rule-dialog-context";
+import { ProjectsProvider, useProjects } from "../contexts/projects-context";
 import { usePersistedState } from "../hooks/use-persisted-state";
 
 type Page = "calendar" | "log" | "projects" | "settings" | "rules";
@@ -64,13 +65,13 @@ interface State {
   projectTab: ProjectTab;
 }
 
-export function App() {
+function AppContent() {
+  const { projects } = useProjects();
   const [state, setState] = usePersistedState<State>("appState", {
     page: "calendar",
     selectedProjectId: null,
     projectTab: "calendar",
   });
-  const [projects, setProjects] = useState<Project[]>([]);
   const [dateRange, setDateRange] = useState<DateRange>({
     preset: "all",
     startDate: null,
@@ -84,26 +85,7 @@ export function App() {
   const { permissionStatus, isChecking, syncState, triggerSync } =
     useAutoSync();
 
-  // Fetch projects on mount
-  useEffect(() => {
-    fetchProjects();
-  }, []);
-
-  // Refetch projects when sync completes
-  useSyncComplete(fetchProjects);
-
-  async function fetchProjects() {
-    try {
-      const result = await invoke<Project[]>("get_all_projects");
-      setProjects(result);
-    } catch (err) {
-      console.error("Error fetching projects:", err);
-    }
-  }
-
   function handleProjectUpdated(deleted = false) {
-    // Refresh projects
-    fetchProjects();
     // If we're on a project view and it was deleted, go back to calendar
     if (deleted && page === "projects") {
       setState({
@@ -200,7 +182,6 @@ export function App() {
                     selectedProjectId: projectId,
                   })
                 }
-                onProjectCreated={fetchProjects}
               />
               <main className="flex-1 border-l overflow-y-auto h-full">
                 {page === "log" && <Log />}
@@ -235,6 +216,14 @@ export function App() {
   );
 }
 
+export function App() {
+  return (
+    <ProjectsProvider>
+      <AppContent />
+    </ProjectsProvider>
+  );
+}
+
 type AppSidebarProps = {
   page: Page;
   selectedProjectId: number | null;
@@ -242,7 +231,6 @@ type AppSidebarProps = {
   syncState: import("../types/sync").SyncState;
   onChangePage: (page: Page) => void;
   onSelectProject: (projectId: number) => void;
-  onProjectCreated: () => void;
   triggerSync: () => Promise<void>;
 };
 
@@ -254,7 +242,6 @@ export function AppSidebar({
   triggerSync,
   onChangePage,
   onSelectProject,
-  onProjectCreated,
 }: AppSidebarProps) {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [formData, setFormData] = useState({ name: "", color: "#0173B2" });
@@ -270,7 +257,6 @@ export function AppSidebar({
       });
       setFormData({ name: "", color: "#0173B2" });
       setIsCreateOpen(false);
-      onProjectCreated();
     } catch (err) {
       console.error("Error creating project:", err);
     }
