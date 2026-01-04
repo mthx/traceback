@@ -193,45 +193,18 @@ export function Projects({
         onValueChange={(value) => onProjectTabChange(value as ProjectTab)}
         className="flex-1 flex flex-col min-h-0"
       >
-        <div className="flex items-center justify-center pt-3 pr-3">
-          <div className="flex-1 flex items-center justify-center">
-            <TabsList>
-              <TabsTrigger value="calendar">Calendar</TabsTrigger>
-              <TabsTrigger value="events">Events</TabsTrigger>
-            </TabsList>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {onShowWeekendsChange && (
-                <>
-                  <DropdownMenuItem
-                    onClick={() => onShowWeekendsChange(!showWeekends)}
-                  >
-                    {showWeekends ? "Hide Weekends" : "Show Weekends"}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                </>
-              )}
-              <DropdownMenuItem onClick={openEditDialog}>
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit Project
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => setIsDeleteOpen(true)}
-                className="text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete Project
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        <div className="flex items-center justify-center pt-3">
+          <TabsList>
+            <TabsTrigger value="log">Log</TabsTrigger>
+            <TabsTrigger value="calendar">Calendar</TabsTrigger>
+          </TabsList>
         </div>
 
+        <TabsContent value="log" className="flex-1 min-h-0 mt-0 flex flex-col">
+          <div className="flex-1 min-h-0">
+            <LogView projectId={projectId} />
+          </div>
+        </TabsContent>
         <TabsContent
           value="calendar"
           className="flex-1 min-h-0 mt-0 flex flex-col"
@@ -292,15 +265,6 @@ export function Projects({
               </div>
             </CalendarViewProvider>
           )}
-        </TabsContent>
-
-        <TabsContent
-          value="events"
-          className="flex-1 min-h-0 mt-0 flex flex-col"
-        >
-          <div className="flex-1 min-h-0">
-            <LogView projectId={projectId} />
-          </div>
         </TabsContent>
       </Tabs>
 
