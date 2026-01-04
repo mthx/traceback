@@ -354,8 +354,6 @@ function aggregateBrowserEvents(
     const groupingKey = parts.slice(3).join(":"); // Handle grouping keys with colons
     const type = parts[0] as "document" | "research";
 
-    console.log(groupingKey, type);
-
     const firstVisit = sorted[0];
     // Find min start and max end times
     const visitTimes = visits.map((v) => new Date(v.start_date).getTime());
@@ -381,7 +379,7 @@ function aggregateBrowserEvents(
         : adjustedEnd;
 
     aggregated.push({
-      id: groupingKey,
+      id: key,
       type,
       title: groupingKey,
       start_date: new Date(adjustedStart).toISOString(),

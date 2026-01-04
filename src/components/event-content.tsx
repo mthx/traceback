@@ -70,9 +70,7 @@ interface EventHeaderProps {
 }
 
 export function EventHeader({ event }: EventHeaderProps) {
-  console.log(event);
   const Icon = getEventIcon(event);
-  console.log(Icon);
   return (
     <div className="flex items-start gap-2">
       <Icon
