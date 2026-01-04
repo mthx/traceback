@@ -131,6 +131,7 @@ export function Log() {
   const dayRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const eventRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const focusedEventIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     fetchInitialData();
@@ -152,30 +153,42 @@ export function Log() {
     const handleFocusChange = () => {
       const focusedElement = document.activeElement as HTMLElement;
       const eventId = focusedElement?.dataset?.eventId;
-      setFocusedEvent(eventId ? getEventById(eventId) || null : null);
+      const newFocusedEvent = eventId ? getEventById(eventId) || null : null;
+
+      // Update the ref with the current focused ID
+      focusedEventIdRef.current = eventId || null;
+
+      // Only update state if the ID actually changed to avoid unnecessary re-renders
+      const currentId = focusedEvent ? getEventId(focusedEvent) : null;
+      const newId = newFocusedEvent ? getEventId(newFocusedEvent) : null;
+
+      if (currentId !== newId) {
+        setFocusedEvent(newFocusedEvent);
+      }
     };
 
     document.addEventListener("focusin", handleFocusChange);
     return () => document.removeEventListener("focusin", handleFocusChange);
-  }, [getEventById]);
+  }, [getEventById, focusedEvent]);
 
   useSyncComplete(() => {
     refreshData();
   });
 
-  // Focus first event on initial load
   useEffect(() => {
-    const activeElement = document.activeElement as HTMLElement;
-    const hasEventFocused = activeElement?.dataset?.eventId;
-    if (dayGroups.length > 0 && !hasEventFocused) {
-      const firstEvent = dayGroups[0].events[0];
+    if (dayGroups.length > 0 && !focusedEvent) {
+      const firstEvent = dayGroups[0]?.events[0];
       if (firstEvent) {
         const eventId = getEventId(firstEvent);
-        const element = eventRefs.current.get(eventId);
-        element?.focus();
+        const element = document.querySelector(
+          `[data-event-id="${eventId}"]`
+        ) as HTMLElement;
+        if (element) {
+          element.focus();
+        }
       }
     }
-  }, [dayGroups]);
+  }, [dayGroups, focusedEvent]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -639,6 +652,10 @@ export function Log() {
                         domain
                       );
 
+                      const isSelected =
+                        focusedEvent &&
+                        getEventId(focusedEvent) === getEventId(event);
+
                       return (
                         <button
                           key={getEventId(event)}
@@ -654,7 +671,7 @@ export function Log() {
                           onClick={(e) => {
                             e.currentTarget.focus();
                           }}
-                          className="relative w-full pl-8 pr-4 py-2.5 text-left transition-colors hover:bg-muted/30 focus:bg-accent/70 focus:outline-none focus:before:absolute focus:before:left-0 focus:before:top-0 focus:before:bottom-0 focus:before:w-0.5 focus:before:bg-accent-foreground"
+                          className={`relative w-full pl-8 pr-4 py-2.5 text-left transition-colors hover:bg-muted/30 focus:bg-accent/70 focus:outline-none focus:before:absolute focus:before:left-0 focus:before:top-0 focus:before:bottom-0 focus:before:w-0.5 focus:before:bg-accent-foreground ${isSelected ? "bg-accent/70" : ""}`}
                         >
                           <div className="flex items-start gap-3">
                             <div className="mt-0.5">
@@ -701,7 +718,7 @@ export function Log() {
 
       <DetailPanel
         focusedEvent={focusedEvent}
-        onAssignmentComplete={fetchInitialData}
+        onAssignmentComplete={refreshData}
       />
     </div>
   );
