@@ -5,7 +5,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { Project, UIEvent } from "@/types/event";
-import { getEventBlockStyle } from "./calendar-utils";
+import { getEventBlockStyle, NEUTRAL_COLOR } from "./calendar-utils";
 
 interface EventBlockProps {
   event: UIEvent;
@@ -31,7 +31,7 @@ export function EventBlock({
 }: EventBlockProps) {
   const project =
     event.project_id && projectMap ? projectMap.get(event.project_id) : null;
-  const eventColor = project?.color || "#94a3b8";
+  const eventColor = project?.color || NEUTRAL_COLOR;
   const style = getEventBlockStyle(eventColor, position);
   const activityCount = event.activities.length;
 

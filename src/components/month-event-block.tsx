@@ -5,7 +5,11 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { EventTooltipContent } from "@/components/event-tooltip-content";
-import { getEventBlockStyle, formatEventTime } from "./calendar-utils";
+import {
+  getEventBlockStyle,
+  formatEventTime,
+  NEUTRAL_COLOR,
+} from "./calendar-utils";
 
 interface MonthEventBlockProps {
   event: UIEvent;
@@ -22,7 +26,7 @@ export function MonthEventBlock({
 }: MonthEventBlockProps) {
   const project =
     event.project_id && projectMap ? projectMap.get(event.project_id) : null;
-  const eventColor = project?.color || "#94a3b8";
+  const eventColor = project?.color || NEUTRAL_COLOR;
   const style = getEventBlockStyle(eventColor);
   return (
     <Tooltip>

@@ -42,6 +42,7 @@ export interface ProjectRule {
     | "url_pattern"
     | "domain";
   match_value: string;
+  priority: number;
   created_at: string;
 }
 

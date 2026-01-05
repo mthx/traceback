@@ -54,6 +54,7 @@ pub struct ProjectRule {
     pub project_id: i64,
     pub rule_type: String, // "organizer", "title_pattern", "repository"
     pub match_value: String,
+    pub priority: i64, // Lower number = higher priority (0 is highest)
     #[serde(
         serialize_with = "serialize_timestamp",
         deserialize_with = "deserialize_timestamp"
@@ -233,6 +234,7 @@ impl Database {
                 project_id INTEGER NOT NULL,
                 rule_type TEXT NOT NULL,
                 match_value TEXT NOT NULL,
+                priority INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL,
                 FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE,
                 UNIQUE(rule_type, match_value)
@@ -877,9 +879,20 @@ impl Database {
     ) -> Result<i64> {
         let now = chrono::Utc::now().timestamp();
 
+        let max_priority: i64 = self
+            .conn
+            .query_row(
+                "SELECT COALESCE(MAX(priority), -1) FROM project_rules",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(-1);
+
+        let new_priority = max_priority + 1;
+
         self.conn.execute(
-            "INSERT INTO project_rules (project_id, rule_type, match_value, created_at) VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params![project_id, rule_type, match_value, now],
+            "INSERT INTO project_rules (project_id, rule_type, match_value, priority, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![project_id, rule_type, match_value, new_priority, now],
         )?;
 
         Ok(self.conn.last_insert_rowid())
@@ -887,9 +900,9 @@ impl Database {
 
     pub fn get_project_rules(&self, project_id: Option<i64>) -> Result<Vec<ProjectRule>> {
         let query = if project_id.is_some() {
-            "SELECT id, project_id, rule_type, match_value, created_at FROM project_rules WHERE project_id = ?1 ORDER BY created_at DESC"
+            "SELECT id, project_id, rule_type, match_value, priority, created_at FROM project_rules WHERE project_id = ?1 ORDER BY priority ASC"
         } else {
-            "SELECT id, project_id, rule_type, match_value, created_at FROM project_rules ORDER BY created_at DESC"
+            "SELECT id, project_id, rule_type, match_value, priority, created_at FROM project_rules ORDER BY priority ASC"
         };
 
         let mut stmt = self.conn.prepare(query)?;
@@ -901,7 +914,8 @@ impl Database {
                     project_id: row.get(1)?,
                     rule_type: row.get(2)?,
                     match_value: row.get(3)?,
-                    created_at: row.get(4)?,
+                    priority: row.get(4)?,
+                    created_at: row.get(5)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?
@@ -912,7 +926,8 @@ impl Database {
                     project_id: row.get(1)?,
                     rule_type: row.get(2)?,
                     match_value: row.get(3)?,
-                    created_at: row.get(4)?,
+                    priority: row.get(4)?,
+                    created_at: row.get(5)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?
@@ -941,62 +956,65 @@ impl Database {
         Ok(())
     }
 
+    pub fn reorder_project_rules(&self, rule_ids: Vec<i64>) -> Result<()> {
+        for (index, rule_id) in rule_ids.iter().enumerate() {
+            self.conn.execute(
+                "UPDATE project_rules SET priority = ?1 WHERE id = ?2",
+                rusqlite::params![index as i64, rule_id],
+            )?;
+        }
+        Ok(())
+    }
+
     pub fn apply_rules_to_events(&self) -> Result<usize> {
+        self.conn
+            .execute("UPDATE events SET project_id = NULL", [])?;
+
         let rules = self.get_project_rules(None)?;
         let mut updated_count = 0;
 
         for rule in rules {
             let count = match rule.rule_type.as_str() {
-                "organizer" => {
-                    // Match calendar events by organizer contact name
-                    self.conn.execute(
-                        "UPDATE events
+                "organizer" => self.conn.execute(
+                    "UPDATE events
                          SET project_id = ?1
                          WHERE event_type = 'calendar'
+                         AND project_id IS NULL
                          AND organizer_id IN (SELECT id FROM contacts WHERE name = ?2)",
-                        rusqlite::params![rule.project_id, rule.match_value],
-                    )?
-                }
-                "title_pattern" => {
-                    // Match calendar events by title pattern (case-insensitive)
-                    self.conn.execute(
-                        "UPDATE events
+                    rusqlite::params![rule.project_id, rule.match_value],
+                )?,
+                "title_pattern" => self.conn.execute(
+                    "UPDATE events
                          SET project_id = ?1
                          WHERE event_type = 'calendar'
+                         AND project_id IS NULL
                          AND lower(title) LIKE lower(?2)",
-                        rusqlite::params![rule.project_id, format!("%{}%", rule.match_value)],
-                    )?
-                }
-                "repository" => {
-                    // Match git/browser events by repository path using promoted field
-                    self.conn.execute(
-                        "UPDATE events
+                    rusqlite::params![rule.project_id, format!("%{}%", rule.match_value)],
+                )?,
+                "repository" => self.conn.execute(
+                    "UPDATE events
                          SET project_id = ?1
                          WHERE (event_type = 'git' OR event_type = 'browser_history')
+                         AND project_id IS NULL
                          AND repository_path = ?2",
-                        rusqlite::params![rule.project_id, rule.match_value],
-                    )?
-                }
-                "url_pattern" => {
-                    // Match browser events by URL pattern (still in JSON)
-                    self.conn.execute(
-                        "UPDATE events
+                    rusqlite::params![rule.project_id, rule.match_value],
+                )?,
+                "url_pattern" => self.conn.execute(
+                    "UPDATE events
                          SET project_id = ?1
                          WHERE event_type = 'browser_history'
+                         AND project_id IS NULL
                          AND json_extract(type_specific_data, '$.url') LIKE ?2",
-                        rusqlite::params![rule.project_id, rule.match_value],
-                    )?
-                }
-                "domain" => {
-                    // Match browser events by domain using promoted field
-                    self.conn.execute(
-                        "UPDATE events
+                    rusqlite::params![rule.project_id, rule.match_value],
+                )?,
+                "domain" => self.conn.execute(
+                    "UPDATE events
                          SET project_id = ?1
                          WHERE event_type = 'browser_history'
+                         AND project_id IS NULL
                          AND domain = ?2",
-                        rusqlite::params![rule.project_id, rule.match_value],
-                    )?
-                }
+                    rusqlite::params![rule.project_id, rule.match_value],
+                )?,
                 _ => 0,
             };
             updated_count += count;

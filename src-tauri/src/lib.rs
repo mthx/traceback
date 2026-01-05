@@ -589,6 +589,11 @@ fn delete_project_rule(state: State<AppState>, rule_id: i64) -> Result<(), Strin
 }
 
 #[tauri::command]
+fn reorder_project_rules(state: State<AppState>, rule_ids: Vec<i64>) -> Result<(), String> {
+    state.with_db(|db| db.reorder_project_rules(rule_ids))
+}
+
+#[tauri::command]
 fn apply_rules_to_events(state: State<AppState>) -> Result<usize, String> {
     state.with_db(|db| db.apply_rules_to_events())
 }
@@ -708,6 +713,7 @@ pub fn run() {
             get_project_rules,
             update_project_rule,
             delete_project_rule,
+            reorder_project_rules,
             apply_rules_to_events,
             get_zen_profile_path,
             set_zen_profile_path,

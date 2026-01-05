@@ -36,6 +36,7 @@ import {
   formatWeekday,
   formatMonth,
   formatDateFull,
+  NEUTRAL_COLOR,
 } from "@/components/calendar-utils";
 import { useScrollToHour } from "@/hooks/use-calendar-scroll";
 
@@ -472,7 +473,7 @@ function AllDayEventsRow({
             event.project_id && projectMap
               ? projectMap.get(event.project_id)
               : null;
-          const eventColor = project?.color || "#94a3b8";
+          const eventColor = project?.color || NEUTRAL_COLOR;
 
           return (
             <Tooltip key={event.id}>

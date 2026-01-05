@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Project, ProjectRule, StoredEvent } from "../types/event";
-import { parseCalendarEventData, parseGitEventData } from "../types/event";
+import { parseCalendarEventData } from "../types/event";
 
 interface RuleFormProps {
   project?: Project | null;
@@ -45,7 +45,6 @@ export function RuleForm({
       });
     } else if (event) {
       const eventData = parseCalendarEventData(event);
-      const gitData = parseGitEventData(event);
 
       if (eventData?.organizer) {
         setFormData({
@@ -53,11 +52,11 @@ export function RuleForm({
           ruleType: "organizer",
           matchValue: eventData.organizer,
         });
-      } else if (gitData?.repository_name) {
+      } else if (event.repository_path) {
         setFormData({
           projectId: project?.id || null,
           ruleType: "repository",
-          matchValue: gitData.repository_name,
+          matchValue: event.repository_path,
         });
       } else {
         setFormData({
@@ -159,7 +158,7 @@ export function RuleForm({
         <Label htmlFor="match-value">
           {formData.ruleType === "organizer" && "Organizer Email"}
           {formData.ruleType === "title_pattern" && "Text to Match"}
-          {formData.ruleType === "repository" && "Repository Name"}
+          {formData.ruleType === "repository" && "Repository Path"}
         </Label>
         <Input
           id="match-value"
@@ -168,7 +167,7 @@ export function RuleForm({
               ? "user@example.com"
               : formData.ruleType === "title_pattern"
                 ? "standup"
-                : "my-repo"
+                : "facebook/react"
           }
           value={formData.matchValue}
           onChange={(e) =>
