@@ -268,7 +268,13 @@ fn sync_all_sources(state: State<AppState>, app: tauri::AppHandle) -> Result<(),
                 }
             }
 
-            // Phase 5: Update sync status
+            // Phase 5: Apply rules to newly synced events
+            if let Err(e) = state_clone.with_db(|db| db.apply_rules_to_events()) {
+                emit_sync_failed(&app_clone, None, e);
+                return;
+            }
+
+            // Phase 6: Update sync status
             if let Err(e) =
                 state_clone.with_db(|db| db.update_sync_status(Some(now_timestamp), false))
             {
@@ -346,7 +352,7 @@ fn sync_git_source(
         return Ok((0, 0));
     }
 
-    let repositories = match discover_repositories(&path, 2) {
+    let repositories = match discover_repositories(&path, 3) {
         Ok(repos) => repos,
         Err(_) => {
             return Ok((0, 0));

@@ -13,6 +13,7 @@ export interface StoredEvent {
   organizer_id?: number;
   repository_path?: string;
   domain?: string;
+  assigned_by_rule_id?: number;
   created_at: string;
   updated_at: string;
 }

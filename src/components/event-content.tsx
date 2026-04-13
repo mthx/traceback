@@ -8,7 +8,8 @@ import { formatDateLong, formatEventTime } from "@/components/calendar-utils";
 import { EventDetails } from "@/components/event-details";
 import { Button } from "@/components/ui/button";
 import { useRuleDialog } from "@/contexts/rule-dialog-context";
-import type { Project, UIEvent } from "@/types/event";
+import { useNavigation } from "@/contexts/navigation-context";
+import type { Project, ProjectRule, UIEvent } from "@/types/event";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Calendar,
@@ -103,6 +104,7 @@ interface EventProjectSelectorProps {
   onProjectSelect: (projectId: number) => void;
   onUnassign: () => void;
   onCreateRule?: () => void;
+  onViewRule?: () => void;
 }
 
 export function EventProjectSelector({
@@ -112,6 +114,7 @@ export function EventProjectSelector({
   onProjectSelect,
   onUnassign,
   onCreateRule,
+  onViewRule,
 }: EventProjectSelectorProps) {
   const selectedProject = selectedProjectId
     ? projects.find((p) => p.id === selectedProjectId)
@@ -156,7 +159,12 @@ export function EventProjectSelector({
           {project.name}
         </Button>
       ))}
-      {onCreateRule && (
+      {onViewRule && (
+        <Button variant="ghost" size="sm" onClick={onViewRule} className="h-8">
+          View Rule
+        </Button>
+      )}
+      {!onViewRule && onCreateRule && (
         <Button
           variant="ghost"
           size="sm"
@@ -177,23 +185,57 @@ interface EventContentProps {
   showHeader?: boolean;
 }
 
+function getCommonRuleId(event: UIEvent): number | null {
+  const ruleIds = event.activities
+    .map((a) => a.assigned_by_rule_id)
+    .filter((id): id is number => id !== undefined && id !== null);
+
+  if (ruleIds.length === 0) return null;
+
+  const firstId = ruleIds[0];
+  return ruleIds.every((id) => id === firstId) ? firstId : null;
+}
+
 export function EventContent({
   event,
   onAssignmentComplete,
   showHeader = false,
 }: EventContentProps) {
-  const { openRuleDialog } = useRuleDialog();
+  const { openRuleDialog, closeAllDialogs } = useRuleDialog();
+  const { navigateToRule } = useNavigation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(
     event.project_id || null
   );
   const [isAssigning, setIsAssigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [assignedRule, setAssignedRule] = useState<ProjectRule | null>(null);
+
+  const commonRuleId = getCommonRuleId(event);
 
   useEffect(() => {
     loadProjects();
     setSelectedProjectId(event.project_id || null);
   }, [event]);
+
+  useEffect(() => {
+    async function loadRule() {
+      if (!commonRuleId) {
+        setAssignedRule(null);
+        return;
+      }
+      try {
+        const rules = await invoke<ProjectRule[]>("get_project_rules", {
+          projectId: null,
+        });
+        const rule = rules.find((r) => r.id === commonRuleId) || null;
+        setAssignedRule(rule);
+      } catch {
+        setAssignedRule(null);
+      }
+    }
+    loadRule();
+  }, [commonRuleId]);
 
   async function loadProjects() {
     try {
@@ -285,6 +327,14 @@ export function EventContent({
           onProjectSelect={handleAssign}
           onUnassign={handleUnassign}
           onCreateRule={handleCreateRule}
+          onViewRule={
+            assignedRule
+              ? () => {
+                  closeAllDialogs();
+                  navigateToRule(assignedRule.id);
+                }
+              : undefined
+          }
         />
       </div>
 

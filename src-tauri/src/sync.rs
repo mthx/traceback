@@ -96,6 +96,7 @@ pub fn sync_single_event(db: &Database, cal_event: &CalendarEvent) -> Result<(bo
         organizer_id,
         repository_path: None,
         domain: None,
+        assigned_by_rule_id: None,
         created_at: 0,
         updated_at: 0,
     };
@@ -146,6 +147,7 @@ pub fn sync_git_activity(
         organizer_id: None,
         repository_path: repo_info.repository_path.clone(),
         domain: None,
+        assigned_by_rule_id: None,
         created_at: 0,
         updated_at: 0,
     };
@@ -215,6 +217,7 @@ pub fn sync_browser_visit(
         organizer_id: None,
         repository_path,
         domain: Some(domain),
+        assigned_by_rule_id: None,
         created_at: 0,
         updated_at: 0,
     };

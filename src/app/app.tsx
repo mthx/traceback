@@ -54,6 +54,7 @@ import { useAutoSync } from "../hooks/sync-hooks";
 import type { DateRange } from "../components/date-range-filter";
 import { RuleDialogProvider } from "../contexts/rule-dialog-context";
 import { ProjectsProvider, useProjects } from "../contexts/projects-context";
+import { NavigationProvider } from "../contexts/navigation-context";
 import { usePersistedState } from "../hooks/use-persisted-state";
 
 type Page = "calendar" | "log" | "projects" | "settings" | "rules";
@@ -103,116 +104,131 @@ function AppContent() {
   const hasPermission = permissionStatus === "FullAccess";
   const showOnboarding = !hasPermission;
 
-  return (
-    <RuleDialogProvider>
-      <div className="h-full relative">
-        {/* Draggable title bar - absolutely positioned overlay */}
-        <div
-          data-tauri-drag-region
-          className="absolute top-0 left-0 right-0 h-4 z-50 pointer-events-auto"
-        />
+  function handleNavigateToRule(ruleId: number) {
+    invoke("set_setting", {
+      key: "rulesFocusedRuleId",
+      value: JSON.stringify(ruleId),
+    });
+    setState({
+      ...state,
+      page: "rules",
+      selectedProjectId: null,
+    });
+  }
 
-        <SidebarProvider defaultOpen className="h-full">
-          {showOnboarding ? (
-            <main className="flex-1 overflow-y-auto h-full flex items-center justify-center p-8">
-              <Card className="max-w-md">
-                <CardHeader>
-                  <CardTitle>Welcome to Traceback</CardTitle>
-                  <CardDescription>
-                    {isChecking
-                      ? "Checking calendar permissions..."
-                      : "Import your Mac Calendar events to start tracking time"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <p className="text-sm text-muted-foreground">
-                      Click below to import your calendar events. This will
-                      request permission to access your Mac Calendar.
-                    </p>
-                    <Button
-                      onClick={handleFirstSync}
-                      disabled={isChecking || syncState.inProgress}
-                      className="w-full"
-                    >
-                      {syncState.inProgress
-                        ? "Importing..."
-                        : "Import Calendar Events"}
-                    </Button>
-                    <p className="text-xs text-muted-foreground">
-                      You'll be prompted to grant calendar access. Once granted,
-                      events will sync automatically.
-                    </p>
-                    {syncState.errors.length > 0 && (
-                      <div className="border border-destructive rounded-md p-3 mt-4">
-                        <p className="text-sm text-destructive font-medium">
-                          Error
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {syncState.errors[0].error}
-                        </p>
-                        <p className="text-sm text-muted-foreground mt-2">
-                          Make sure to grant calendar permissions when prompted.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </main>
-          ) : (
-            <>
-              <AppSidebar
-                page={page}
-                selectedProjectId={selectedProjectId}
-                projects={projects}
-                syncState={syncState}
-                triggerSync={triggerSync}
-                onChangePage={(page) =>
-                  setState({
-                    ...state,
-                    page,
-                    selectedProjectId: null,
-                  })
-                }
-                onSelectProject={(projectId) =>
-                  setState({
-                    ...state,
-                    page: "projects",
-                    selectedProjectId: projectId,
-                  })
-                }
-              />
-              <main className="flex-1 border-l overflow-y-auto h-full">
-                {page === "log" && <Log />}
-                {page === "calendar" && (
-                  <CalendarPage
-                    showWeekends={showWeekends}
-                    onShowWeekendsChange={setShowWeekends}
-                  />
-                )}
-                {page === "projects" && (
-                  <Projects
-                    projectId={selectedProjectId}
-                    projectTab={projectTab}
-                    onProjectTabChange={(tab) =>
-                      setState({ ...state, projectTab: tab })
-                    }
-                    onProjectUpdated={handleProjectUpdated}
-                    dateRange={dateRange}
-                    onDateRangeChange={setDateRange}
-                    showWeekends={showWeekends}
-                    onShowWeekendsChange={setShowWeekends}
-                  />
-                )}
-                {page === "rules" && <Rules />}
-                {page === "settings" && <Settings />}
+  return (
+    <NavigationProvider onNavigateToRule={handleNavigateToRule}>
+      <RuleDialogProvider>
+        <div className="h-full relative">
+          {/* Draggable title bar - absolutely positioned overlay */}
+          <div
+            data-tauri-drag-region
+            className="absolute top-0 left-0 right-0 h-4 z-50 pointer-events-auto"
+          />
+
+          <SidebarProvider defaultOpen className="h-full">
+            {showOnboarding ? (
+              <main className="flex-1 overflow-y-auto h-full flex items-center justify-center p-8">
+                <Card className="max-w-md">
+                  <CardHeader>
+                    <CardTitle>Welcome to Traceback</CardTitle>
+                    <CardDescription>
+                      {isChecking
+                        ? "Checking calendar permissions..."
+                        : "Import your Mac Calendar events to start tracking time"}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Click below to import your calendar events. This will
+                        request permission to access your Mac Calendar.
+                      </p>
+                      <Button
+                        onClick={handleFirstSync}
+                        disabled={isChecking || syncState.inProgress}
+                        className="w-full"
+                      >
+                        {syncState.inProgress
+                          ? "Importing..."
+                          : "Import Calendar Events"}
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        You'll be prompted to grant calendar access. Once
+                        granted, events will sync automatically.
+                      </p>
+                      {syncState.errors.length > 0 && (
+                        <div className="border border-destructive rounded-md p-3 mt-4">
+                          <p className="text-sm text-destructive font-medium">
+                            Error
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {syncState.errors[0].error}
+                          </p>
+                          <p className="text-sm text-muted-foreground mt-2">
+                            Make sure to grant calendar permissions when
+                            prompted.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
               </main>
-            </>
-          )}
-        </SidebarProvider>
-      </div>
-    </RuleDialogProvider>
+            ) : (
+              <>
+                <AppSidebar
+                  page={page}
+                  selectedProjectId={selectedProjectId}
+                  projects={projects}
+                  syncState={syncState}
+                  triggerSync={triggerSync}
+                  onChangePage={(page) =>
+                    setState({
+                      ...state,
+                      page,
+                      selectedProjectId: null,
+                    })
+                  }
+                  onSelectProject={(projectId) =>
+                    setState({
+                      ...state,
+                      page: "projects",
+                      selectedProjectId: projectId,
+                    })
+                  }
+                />
+                <main className="flex-1 border-l overflow-y-auto h-full">
+                  {page === "log" && <Log />}
+                  {page === "calendar" && (
+                    <CalendarPage
+                      showWeekends={showWeekends}
+                      onShowWeekendsChange={setShowWeekends}
+                    />
+                  )}
+                  {page === "projects" && (
+                    <Projects
+                      projectId={selectedProjectId}
+                      projectTab={projectTab}
+                      onProjectTabChange={(tab) =>
+                        setState({ ...state, projectTab: tab })
+                      }
+                      onProjectUpdated={handleProjectUpdated}
+                      dateRange={dateRange}
+                      onDateRangeChange={setDateRange}
+                      showWeekends={showWeekends}
+                      onShowWeekendsChange={setShowWeekends}
+                    />
+                  )}
+                  {page === "rules" && <Rules />}
+                  {page === "settings" && <Settings />}
+                </main>
+              </>
+            )}
+          </SidebarProvider>
+        </div>
+      </RuleDialogProvider>
+    </NavigationProvider>
   );
 }
 

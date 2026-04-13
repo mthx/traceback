@@ -24,6 +24,7 @@ pub struct Event {
     pub organizer_id: Option<i64>, // FK to contacts table (calendar events)
     pub repository_path: Option<String>, // Canonical org/repo path (git/browser events)
     pub domain: Option<String>,    // Domain (browser_history events)
+    pub assigned_by_rule_id: Option<i64>,
     #[serde(
         serialize_with = "serialize_timestamp",
         deserialize_with = "deserialize_timestamp"
@@ -209,11 +210,13 @@ impl Database {
                 organizer_id INTEGER,
                 repository_path TEXT,
                 domain TEXT,
+                assigned_by_rule_id INTEGER,
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL,
                 UNIQUE(event_type, external_id),
                 FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL,
-                FOREIGN KEY (organizer_id) REFERENCES contacts (id) ON DELETE SET NULL
+                FOREIGN KEY (organizer_id) REFERENCES contacts (id) ON DELETE SET NULL,
+                FOREIGN KEY (assigned_by_rule_id) REFERENCES project_rules (id) ON DELETE SET NULL
             );
 
             CREATE TABLE IF NOT EXISTS sync_metadata (
@@ -260,6 +263,23 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_events_domain ON events(domain) WHERE domain IS NOT NULL;
             CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email) WHERE email IS NOT NULL;
             ",
+        )?;
+
+        // Add assigned_by_rule_id to events if it doesn't exist yet
+        let has_column: bool = self
+            .conn
+            .prepare("SELECT assigned_by_rule_id FROM events LIMIT 0")
+            .is_ok();
+        if !has_column {
+            self.conn.execute_batch(
+                "ALTER TABLE events ADD COLUMN assigned_by_rule_id INTEGER REFERENCES project_rules(id) ON DELETE SET NULL",
+            )?;
+        }
+
+        // Clear stale sync_in_progress flag from a previous crash
+        self.conn.execute(
+            "UPDATE sync_metadata SET sync_in_progress = 0 WHERE sync_in_progress = 1",
+            [],
         )?;
 
         // Initialize default settings if they don't exist
@@ -436,7 +456,7 @@ impl Database {
 
     pub fn assign_event_to_project(&self, event_id: i64, project_id: Option<i64>) -> Result<()> {
         self.conn.execute(
-            "UPDATE events SET project_id = ?1 WHERE id = ?2",
+            "UPDATE events SET project_id = ?1, assigned_by_rule_id = NULL WHERE id = ?2",
             rusqlite::params![project_id, event_id],
         )?;
         Ok(())
@@ -446,7 +466,7 @@ impl Database {
         // Get work domains once for the SQL filter
         let work_domains = self.get_work_domains()?;
 
-        let mut sql = "SELECT id, event_type, title, start_date, end_date, external_id, external_link, type_specific_data, project_id, organizer_id, repository_path, domain, created_at, updated_at FROM events".to_string();
+        let mut sql = "SELECT id, event_type, title, start_date, end_date, external_id, external_link, type_specific_data, project_id, organizer_id, repository_path, domain, assigned_by_rule_id, created_at, updated_at FROM events".to_string();
 
         let mut conditions = Vec::new();
         let mut owned_conditions: Vec<String> = Vec::new(); // Store owned strings
@@ -527,8 +547,9 @@ impl Database {
                 organizer_id: row.get(9)?,
                 repository_path: row.get(10)?,
                 domain: row.get(11)?,
-                created_at: row.get(12)?,
-                updated_at: row.get(13)?,
+                assigned_by_rule_id: row.get(12)?,
+                created_at: row.get(13)?,
+                updated_at: row.get(14)?,
             })
         })?;
 
@@ -677,7 +698,7 @@ impl Database {
         // Note: For project-specific queries, we can skip work domain filtering
         // since browser events assigned to projects are already considered "work"
         let mut query = String::from(
-            "SELECT id, event_type, title, start_date, end_date, external_id, external_link, type_specific_data, project_id, organizer_id, repository_path, domain, created_at, updated_at
+            "SELECT id, event_type, title, start_date, end_date, external_id, external_link, type_specific_data, project_id, organizer_id, repository_path, domain, assigned_by_rule_id, created_at, updated_at
              FROM events
              WHERE project_id = ?"
         );
@@ -721,8 +742,9 @@ impl Database {
                     organizer_id: row.get(9)?,
                     repository_path: row.get(10)?,
                     domain: row.get(11)?,
-                    created_at: row.get(12)?,
-                    updated_at: row.get(13)?,
+                    assigned_by_rule_id: row.get(12)?,
+                    created_at: row.get(13)?,
+                    updated_at: row.get(14)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -967,53 +989,51 @@ impl Database {
     }
 
     pub fn apply_rules_to_events(&self) -> Result<usize> {
-        self.conn
-            .execute("UPDATE events SET project_id = NULL", [])?;
-
         let rules = self.get_project_rules(None)?;
         let mut updated_count = 0;
 
         for rule in rules {
+            let rule_id = rule.id;
             let count = match rule.rule_type.as_str() {
                 "organizer" => self.conn.execute(
                     "UPDATE events
-                         SET project_id = ?1
+                         SET project_id = ?1, assigned_by_rule_id = ?3
                          WHERE event_type = 'calendar'
                          AND project_id IS NULL
                          AND organizer_id IN (SELECT id FROM contacts WHERE name = ?2)",
-                    rusqlite::params![rule.project_id, rule.match_value],
+                    rusqlite::params![rule.project_id, rule.match_value, rule_id],
                 )?,
                 "title_pattern" => self.conn.execute(
                     "UPDATE events
-                         SET project_id = ?1
+                         SET project_id = ?1, assigned_by_rule_id = ?3
                          WHERE event_type = 'calendar'
                          AND project_id IS NULL
                          AND lower(title) LIKE lower(?2)",
-                    rusqlite::params![rule.project_id, format!("%{}%", rule.match_value)],
+                    rusqlite::params![rule.project_id, format!("%{}%", rule.match_value), rule_id],
                 )?,
                 "repository" => self.conn.execute(
                     "UPDATE events
-                         SET project_id = ?1
+                         SET project_id = ?1, assigned_by_rule_id = ?3
                          WHERE (event_type = 'git' OR event_type = 'browser_history')
                          AND project_id IS NULL
                          AND repository_path = ?2",
-                    rusqlite::params![rule.project_id, rule.match_value],
+                    rusqlite::params![rule.project_id, rule.match_value, rule_id],
                 )?,
                 "url_pattern" => self.conn.execute(
                     "UPDATE events
-                         SET project_id = ?1
+                         SET project_id = ?1, assigned_by_rule_id = ?3
                          WHERE event_type = 'browser_history'
                          AND project_id IS NULL
                          AND json_extract(type_specific_data, '$.url') LIKE ?2",
-                    rusqlite::params![rule.project_id, rule.match_value],
+                    rusqlite::params![rule.project_id, rule.match_value, rule_id],
                 )?,
                 "domain" => self.conn.execute(
                     "UPDATE events
-                         SET project_id = ?1
+                         SET project_id = ?1, assigned_by_rule_id = ?3
                          WHERE event_type = 'browser_history'
                          AND project_id IS NULL
                          AND domain = ?2",
-                    rusqlite::params![rule.project_id, rule.match_value],
+                    rusqlite::params![rule.project_id, rule.match_value, rule_id],
                 )?,
                 _ => 0,
             };

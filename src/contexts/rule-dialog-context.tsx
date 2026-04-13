@@ -11,6 +11,7 @@ interface SharedDialogsContextValue {
     onSaved?: () => void
   ) => Promise<void>;
   openEventDialog: (event: UIEvent, onAssignmentComplete?: () => void) => void;
+  closeAllDialogs: () => void;
 }
 
 const SharedDialogsContext = createContext<SharedDialogsContextValue | null>(
@@ -81,6 +82,11 @@ export function SharedDialogsProvider({
     setEventDialogOpen(true);
   }
 
+  function closeAllDialogs() {
+    setRuleDialogOpen(false);
+    setEventDialogOpen(false);
+  }
+
   function handleEventAssignmentComplete() {
     if (eventOnComplete) {
       eventOnComplete();
@@ -88,7 +94,9 @@ export function SharedDialogsProvider({
   }
 
   return (
-    <SharedDialogsContext.Provider value={{ openRuleDialog, openEventDialog }}>
+    <SharedDialogsContext.Provider
+      value={{ openRuleDialog, openEventDialog, closeAllDialogs }}
+    >
       {children}
       <RuleEditDialog
         project={ruleProject}
