@@ -50,6 +50,31 @@ pub struct Project {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TimeAllocation {
+    pub id: Option<i64>,
+    pub date_key: String,
+    pub project_id: i64,
+    pub hours: f64,
+    pub confirmed: bool,
+    #[serde(
+        serialize_with = "serialize_timestamp",
+        deserialize_with = "deserialize_timestamp"
+    )]
+    pub created_at: i64,
+    #[serde(
+        serialize_with = "serialize_timestamp",
+        deserialize_with = "deserialize_timestamp"
+    )]
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MonthAllocationSummary {
+    pub project_id: i64,
+    pub total_hours: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectRule {
     pub id: Option<i64>,
     pub project_id: i64,
@@ -249,6 +274,19 @@ impl Database {
                 created_at INTEGER NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS time_allocations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date_key TEXT NOT NULL,
+                project_id INTEGER NOT NULL,
+                hours REAL NOT NULL DEFAULT 0,
+                confirmed INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE,
+                UNIQUE(date_key, project_id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_time_allocations_date ON time_allocations(date_key);
             CREATE INDEX IF NOT EXISTS idx_events_start_date ON events(start_date);
             CREATE INDEX IF NOT EXISTS idx_events_external_id ON events(event_type, external_id);
             CREATE INDEX IF NOT EXISTS idx_events_project_id ON events(project_id);
@@ -1075,5 +1113,102 @@ impl Database {
         )?;
 
         Ok(self.conn.last_insert_rowid())
+    }
+
+    // Time allocation methods
+
+    pub fn get_time_allocations(&self, date_key: &str) -> Result<Vec<TimeAllocation>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, date_key, project_id, hours, confirmed, created_at, updated_at
+             FROM time_allocations WHERE date_key = ?1 ORDER BY project_id",
+        )?;
+        let rows = stmt
+            .query_map(rusqlite::params![date_key], |row| {
+                Ok(TimeAllocation {
+                    id: Some(row.get(0)?),
+                    date_key: row.get(1)?,
+                    project_id: row.get(2)?,
+                    hours: row.get(3)?,
+                    confirmed: row.get::<_, i32>(4)? != 0,
+                    created_at: row.get(5)?,
+                    updated_at: row.get(6)?,
+                })
+            })?
+            .collect::<Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    pub fn upsert_time_allocation(
+        &self,
+        date_key: &str,
+        project_id: i64,
+        hours: f64,
+    ) -> Result<i64> {
+        let now = chrono::Utc::now().timestamp();
+        self.conn.execute(
+            "INSERT INTO time_allocations (date_key, project_id, hours, confirmed, created_at, updated_at)
+             VALUES (?1, ?2, ?3, 0, ?4, ?4)
+             ON CONFLICT(date_key, project_id) DO UPDATE SET hours = ?3, updated_at = ?4",
+            rusqlite::params![date_key, project_id, hours, now],
+        )?;
+        let id = self.conn.query_row(
+            "SELECT id FROM time_allocations WHERE date_key = ?1 AND project_id = ?2",
+            rusqlite::params![date_key, project_id],
+            |row| row.get(0),
+        )?;
+        Ok(id)
+    }
+
+    pub fn delete_time_allocation(&self, id: i64) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM time_allocations WHERE id = ?1",
+            rusqlite::params![id],
+        )?;
+        Ok(())
+    }
+
+    pub fn confirm_day_allocations(&self, date_key: &str, confirmed: bool) -> Result<()> {
+        let now = chrono::Utc::now().timestamp();
+        self.conn.execute(
+            "UPDATE time_allocations SET confirmed = ?1, updated_at = ?2 WHERE date_key = ?3",
+            rusqlite::params![if confirmed { 1 } else { 0 }, now, date_key],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_confirmed_days(
+        &self,
+        start_date_key: &str,
+        end_date_key: &str,
+    ) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT date_key FROM time_allocations
+             WHERE date_key BETWEEN ?1 AND ?2 AND confirmed = 1",
+        )?;
+        let rows = stmt
+            .query_map(rusqlite::params![start_date_key, end_date_key], |row| {
+                row.get(0)
+            })?
+            .collect::<Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    pub fn get_month_allocations(&self, year_month: &str) -> Result<Vec<MonthAllocationSummary>> {
+        let pattern = format!("{}%", year_month);
+        let mut stmt = self.conn.prepare(
+            "SELECT project_id, SUM(hours) as total_hours
+             FROM time_allocations
+             WHERE date_key LIKE ?1 AND confirmed = 1
+             GROUP BY project_id",
+        )?;
+        let rows = stmt
+            .query_map(rusqlite::params![pattern], |row| {
+                Ok(MonthAllocationSummary {
+                    project_id: row.get(0)?,
+                    total_hours: row.get(1)?,
+                })
+            })?
+            .collect::<Result<Vec<_>>>()?;
+        Ok(rows)
     }
 }

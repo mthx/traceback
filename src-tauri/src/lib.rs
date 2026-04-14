@@ -634,6 +634,55 @@ fn remove_github_org(state: State<AppState>, org_name: String) -> Result<(), Str
     state.with_db(|db| db.remove_github_org(&org_name))
 }
 
+#[tauri::command]
+fn get_time_allocations(
+    state: State<AppState>,
+    date_key: String,
+) -> Result<Vec<db::TimeAllocation>, String> {
+    state.with_db(|db| db.get_time_allocations(&date_key))
+}
+
+#[tauri::command]
+fn upsert_time_allocation(
+    state: State<AppState>,
+    date_key: String,
+    project_id: i64,
+    hours: f64,
+) -> Result<i64, String> {
+    state.with_db(|db| db.upsert_time_allocation(&date_key, project_id, hours))
+}
+
+#[tauri::command]
+fn delete_time_allocation(state: State<AppState>, id: i64) -> Result<(), String> {
+    state.with_db(|db| db.delete_time_allocation(id))
+}
+
+#[tauri::command]
+fn confirm_day_allocations(
+    state: State<AppState>,
+    date_key: String,
+    confirmed: bool,
+) -> Result<(), String> {
+    state.with_db(|db| db.confirm_day_allocations(&date_key, confirmed))
+}
+
+#[tauri::command]
+fn get_confirmed_days(
+    state: State<AppState>,
+    start_date_key: String,
+    end_date_key: String,
+) -> Result<Vec<String>, String> {
+    state.with_db(|db| db.get_confirmed_days(&start_date_key, &end_date_key))
+}
+
+#[tauri::command]
+fn get_month_allocations(
+    state: State<AppState>,
+    year_month: String,
+) -> Result<Vec<db::MonthAllocationSummary>, String> {
+    state.with_db(|db| db.get_month_allocations(&year_month))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -727,6 +776,12 @@ pub fn run() {
             get_github_orgs,
             add_github_org,
             remove_github_org,
+            get_time_allocations,
+            upsert_time_allocation,
+            delete_time_allocation,
+            confirm_day_allocations,
+            get_confirmed_days,
+            get_month_allocations,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -33,6 +33,21 @@ export interface Project {
   created_at: string;
 }
 
+export interface TimeAllocation {
+  id: number;
+  date_key: string;
+  project_id: number;
+  hours: number;
+  confirmed: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MonthAllocationSummary {
+  project_id: number;
+  total_hours: number;
+}
+
 export interface ProjectRule {
   id: number;
   project_id: number;
