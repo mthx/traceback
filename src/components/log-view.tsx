@@ -16,7 +16,7 @@ import { usePersistedState } from "@/hooks/use-persisted-state";
 import type { Project, StoredEvent, UIEvent } from "@/types/event";
 import { aggregateAllEvents } from "@/types/event";
 import { invoke } from "@tauri-apps/api/core";
-import { CalendarIcon, Check } from "lucide-react";
+import { CalendarIcon, Check, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TimeAllocationPanel } from "@/components/time-allocation-panel";
 import { MonthAllocationPanel } from "@/components/month-allocation-panel";
@@ -176,10 +176,23 @@ export function LogView({ projectId }: LogViewProps) {
     string | null
   >("logFocusedItemId", null);
   const [confirmedDays, setConfirmedDays] = useState<Set<string>>(new Set());
+  const [collapsedKeys, setCollapsedKeys] = usePersistedState<string[]>(
+    "logCollapsedKeys",
+    []
+  );
+  const collapsedSet = useMemo(() => new Set(collapsedKeys), [collapsedKeys]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dayRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const itemRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const itemRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [calendarOpen, setCalendarOpen] = useState(false);
+
+  function toggleCollapsed(key: string) {
+    if (collapsedSet.has(key)) {
+      setCollapsedKeys(collapsedKeys.filter((k) => k !== key));
+    } else {
+      setCollapsedKeys([...collapsedKeys, key]);
+    }
+  }
 
   useEffect(() => {
     fetchInitialData();
@@ -285,19 +298,24 @@ export function LogView({ projectId }: LogViewProps) {
         keys.push(`month:${yearMonth}`);
         currentMonth = yearMonth;
       }
+      if (collapsedSet.has(`month:${yearMonth}`)) continue;
       keys.push(`day:${group.dateKey}`);
-      for (const event of group.events) {
-        keys.push(`event:${event.id}`);
+      if (!collapsedSet.has(`day:${group.dateKey}`)) {
+        for (const event of group.events) {
+          keys.push(`event:${event.id}`);
+        }
       }
     }
     return keys;
-  }, [dayGroups]);
+  }, [dayGroups, collapsedSet]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
         e.key !== "ArrowUp" &&
         e.key !== "ArrowDown" &&
+        e.key !== "ArrowLeft" &&
+        e.key !== "ArrowRight" &&
         e.key !== "PageUp" &&
         e.key !== "PageDown" &&
         e.key !== "Home" &&
@@ -319,6 +337,50 @@ export function LogView({ projectId }: LogViewProps) {
 
       const currentIndex = allItemKeys.indexOf(currentKey);
       if (currentIndex === -1) return;
+
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        if (
+          (currentKey.startsWith("month:") || currentKey.startsWith("day:")) &&
+          collapsedSet.has(currentKey)
+        ) {
+          toggleCollapsed(currentKey);
+        } else {
+          // Move to first child
+          const nextIndex = currentIndex + 1;
+          if (nextIndex < allItemKeys.length) {
+            getElementByItemKey(allItemKeys[nextIndex])?.focus();
+          }
+        }
+        return;
+      }
+
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        if (
+          (currentKey.startsWith("month:") || currentKey.startsWith("day:")) &&
+          !collapsedSet.has(currentKey)
+        ) {
+          toggleCollapsed(currentKey);
+        } else if (currentKey.startsWith("event:")) {
+          // Move to parent day
+          for (let i = currentIndex - 1; i >= 0; i--) {
+            if (allItemKeys[i].startsWith("day:")) {
+              getElementByItemKey(allItemKeys[i])?.focus();
+              break;
+            }
+          }
+        } else if (currentKey.startsWith("day:")) {
+          // Move to parent month
+          for (let i = currentIndex - 1; i >= 0; i--) {
+            if (allItemKeys[i].startsWith("month:")) {
+              getElementByItemKey(allItemKeys[i])?.focus();
+              break;
+            }
+          }
+        }
+        return;
+      }
 
       if (e.key === "ArrowUp" || e.key === "ArrowDown") {
         e.preventDefault();
@@ -451,7 +513,18 @@ export function LogView({ projectId }: LogViewProps) {
         startDateKey: startKey,
         endDateKey: endKey,
       });
-      setConfirmedDays(new Set(days));
+      const newConfirmed = new Set(days);
+      setConfirmedDays(newConfirmed);
+      const next = collapsedKeys.filter(
+        (k) => !k.startsWith("day:") || newConfirmed.has(k.slice(4))
+      );
+      for (const day of newConfirmed) {
+        const key = `day:${day}`;
+        if (!next.includes(key)) {
+          next.push(key);
+        }
+      }
+      setCollapsedKeys(next);
     } catch (err) {
       console.error("Error fetching confirmed days:", err);
     }
@@ -530,24 +603,54 @@ export function LogView({ projectId }: LogViewProps) {
       if (yearMonth !== currentMonth) {
         const isSelectedMonth =
           selection?.type === "month" && selection.yearMonth === yearMonth;
+        const isMonthCollapsed = collapsedSet.has(`month:${yearMonth}`);
         elements.push(
-          <button
+          <div
             key={`month:${yearMonth}`}
+            role="treeitem"
+            aria-expanded={!isMonthCollapsed}
+            tabIndex={0}
             data-month-key={yearMonth}
-            onClick={(e) => e.currentTarget.focus()}
-            className={`sticky top-0 z-10 w-full bg-background border-b border-neutral-200 dark:border-neutral-800 px-4 py-2.5 text-left transition-colors hover:bg-muted/30 focus:bg-accent/70 focus:outline-none ${isSelectedMonth ? "bg-accent/70" : ""}`}
+            onClick={(e) => {
+              const target = e.target as HTMLElement;
+              if (target.closest("[data-collapse-toggle]")) {
+                toggleCollapsed(`month:${yearMonth}`);
+              } else {
+                e.currentTarget.focus();
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggleCollapsed(`month:${yearMonth}`);
+              }
+            }}
+            className={`sticky top-0 z-10 w-full bg-background border-b border-neutral-200 dark:border-neutral-800 px-4 py-2.5 text-left transition-colors hover:bg-muted focus:bg-accent focus:outline-none cursor-default ${isSelectedMonth ? "bg-accent" : ""}`}
           >
-            <h2 className="text-sm font-semibold">
-              {formatMonthYear(yearMonth)}
-            </h2>
-          </button>
+            <div className="flex items-center gap-1.5">
+              <span
+                data-collapse-toggle
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <ChevronRight
+                  className={`h-3.5 w-3.5 transition-transform ${isMonthCollapsed ? "" : "rotate-90"}`}
+                />
+              </span>
+              <h2 className="text-sm font-semibold">
+                {formatMonthYear(yearMonth)}
+              </h2>
+            </div>
+          </div>
         );
         currentMonth = yearMonth;
       }
 
+      if (collapsedSet.has(`month:${yearMonth}`)) continue;
+
       const isSelectedDay =
         selection?.type === "day" && selection.dateKey === group.dateKey;
       const isConfirmed = confirmedDays.has(group.dateKey);
+      const isCollapsed = collapsedSet.has(`day:${group.dateKey}`);
 
       elements.push(
         <div
@@ -560,12 +663,36 @@ export function LogView({ projectId }: LogViewProps) {
             }
           }}
         >
-          <button
+          <div
+            role="treeitem"
+            aria-expanded={!isCollapsed}
+            tabIndex={0}
             data-date-key={group.dateKey}
-            onClick={(e) => e.currentTarget.focus()}
-            className={`w-full bg-background border-b border-neutral-200 dark:border-neutral-800 px-4 py-2 text-left transition-colors hover:bg-muted/30 focus:bg-accent/50 focus:outline-none ${groupIndex > 0 ? "border-t" : ""} ${isSelectedDay ? "bg-accent/50" : ""}`}
+            onClick={(e) => {
+              const target = e.target as HTMLElement;
+              if (target.closest("[data-collapse-toggle]")) {
+                toggleCollapsed(`day:${group.dateKey}`);
+              } else {
+                e.currentTarget.focus();
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggleCollapsed(`day:${group.dateKey}`);
+              }
+            }}
+            className={`w-full bg-background border-b border-neutral-200 dark:border-neutral-800 px-4 py-2 text-left transition-colors hover:bg-muted/30 focus:bg-accent/50 focus:outline-none cursor-default ${groupIndex > 0 ? "border-t" : ""} ${isSelectedDay ? "bg-accent/50" : ""}`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <span
+                data-collapse-toggle
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <ChevronRight
+                  className={`h-3 w-3 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
+                />
+              </span>
               <h2 className="text-xs font-semibold text-muted-foreground tracking-wide">
                 {formatDateLong(group.date.toISOString())}
               </h2>
@@ -573,59 +700,67 @@ export function LogView({ projectId }: LogViewProps) {
                 <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
               )}
             </div>
-          </button>
-          <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
-            {group.events.map((event) => {
-              const project = event.project_id
-                ? projects.get(event.project_id)
-                : undefined;
-              const title = event.title;
-              const Icon = getEventIcon(event);
-              const isSelected =
-                selection?.type === "event" && selection.event.id === event.id;
+          </div>
+          {!isCollapsed && (
+            <div
+              role="group"
+              className="divide-y divide-neutral-200 dark:divide-neutral-800"
+            >
+              {group.events.map((event) => {
+                const project = event.project_id
+                  ? projects.get(event.project_id)
+                  : undefined;
+                const title = event.title;
+                const Icon = getEventIcon(event);
+                const isSelected =
+                  selection?.type === "event" &&
+                  selection.event.id === event.id;
 
-              return (
-                <button
-                  key={event.id}
-                  data-event-id={event.id}
-                  ref={(el) => {
-                    if (el) {
-                      itemRefs.current.set(event.id, el);
-                    } else {
-                      itemRefs.current.delete(event.id);
-                    }
-                  }}
-                  onClick={(e) => {
-                    e.currentTarget.focus();
-                  }}
-                  className={`relative w-full pl-8 pr-4 py-2.5 text-left transition-colors hover:bg-muted/30 focus:bg-accent/70 focus:outline-none focus:before:absolute focus:before:left-0 focus:before:top-0 focus:before:bottom-0 focus:before:w-0.5 focus:before:bg-accent-foreground ${isSelected ? "bg-accent/70" : ""}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5">
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2">
-                        <div className="font-medium truncate text-sm">
-                          {title}
-                        </div>
-                        {project && (
-                          <div
-                            className="shrink-0 w-2 h-2 rounded-full"
-                            style={{ backgroundColor: project.color }}
-                          />
-                        )}
+                return (
+                  <div
+                    key={event.id}
+                    role="treeitem"
+                    tabIndex={0}
+                    data-event-id={event.id}
+                    ref={(el) => {
+                      if (el) {
+                        itemRefs.current.set(event.id, el);
+                      } else {
+                        itemRefs.current.delete(event.id);
+                      }
+                    }}
+                    onClick={(e) => {
+                      e.currentTarget.focus();
+                    }}
+                    className={`relative w-full pl-8 pr-4 py-2.5 text-left transition-colors hover:bg-muted/30 focus:bg-accent/70 focus:outline-none focus:before:absolute focus:before:left-0 focus:before:top-0 focus:before:bottom-0 focus:before:w-0.5 focus:before:bg-accent-foreground ${isSelected ? "bg-accent/70" : ""}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5">
+                        <Icon className="h-4 w-4 text-muted-foreground" />
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatEventTime(event.start_date)} -{" "}
-                        {formatEventTime(event.end_date)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2">
+                          <div className="font-medium truncate text-sm">
+                            {title}
+                          </div>
+                          {project && (
+                            <div
+                              className="shrink-0 w-2 h-2 rounded-full"
+                              style={{ backgroundColor: project.color }}
+                            />
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatEventTime(event.start_date)} -{" "}
+                          {formatEventTime(event.end_date)}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </button>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       );
     }
@@ -670,7 +805,7 @@ export function LogView({ projectId }: LogViewProps) {
           ) : dayGroups.length === 0 ? (
             <div className="p-4 text-muted-foreground">No events found</div>
           ) : (
-            <div>
+            <div role="tree" aria-label="Activity log">
               {renderGroupedList()}
               {loadingMore && (
                 <div className="p-4 text-center text-muted-foreground">
