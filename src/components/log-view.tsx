@@ -405,6 +405,8 @@ export function LogView({ projectId }: LogViewProps) {
         startDate.setDate(startDate.getDate() - DAYS_PER_PAGE);
       }
 
+      const savedScrollTop = scrollRef.current?.scrollTop ?? 0;
+
       const [eventsData, projectsData, githubOrgs] = await Promise.all([
         invoke<StoredEvent[]>("get_stored_events", {
           startDate: startDate.toISOString(),
@@ -426,6 +428,12 @@ export function LogView({ projectId }: LogViewProps) {
       setDayGroups(grouped);
       setHasMore(eventsData.length > 0);
       setOldestDate(startDate);
+
+      requestAnimationFrame(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = savedScrollTop;
+        }
+      });
 
       refreshConfirmedDays(startDate, endDate);
     } catch (err) {
@@ -683,7 +691,7 @@ export function LogView({ projectId }: LogViewProps) {
         selection={selection}
         projects={projects}
         dayGroups={dayGroups}
-        onAssignmentComplete={refreshData}
+        onAssignmentComplete={() => refreshData(oldestDate)}
         onConfirmChanged={() => refreshConfirmedDays()}
       />
     </div>
